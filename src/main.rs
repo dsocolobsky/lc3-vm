@@ -71,7 +71,7 @@ enum Opcode {
         base_r: u16,
         offset: i16,
     }, // Store Base+Offset (mem[sr+offset] <- sr)
-    TRAP, // Execute Trap
+    TRAP { trap_vec: u16 }, // Execute Trap
     RESERVED, // Unused. Throws an Illegal Opcode Exception.
 }
 
@@ -209,7 +209,11 @@ fn decode_instruction(instruction: u16) -> Option<Opcode> {
                 offset: (instruction & 0b111111) as i16,
             })
         }
-        0b1111 => Some(Opcode::TRAP),
+        0b1111 => {
+            Some(Opcode::TRAP {
+                trap_vec: instruction & 0b1111_1111 // This is 0-extended, not sign-extended
+            })
+        },
         0b1101 => Some(Opcode::RESERVED),
         _ => {
             println!("Unknown instruction {op}");

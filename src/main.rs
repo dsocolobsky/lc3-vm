@@ -13,65 +13,81 @@ enum Argument {
 #[derive(Debug)]
 enum Opcode {
     ADD {
+        // Add (dr <- sr1 + sr2/imm5)
         dr: u16,
         sr1: u16,
         sr2: Argument,
-    }, // Add (dr <- sr1 + sr2/imm5)
+    },
     AND {
+        /// Bitwise And (dr <- sr1 & sr2/imm5)
         dr: u16,
         sr1: u16,
         sr2: Argument,
-    }, // Bitwise And (dr <- sr1 & sr2/imm5)
+    },
     BR {
+        // Branch (If n/z/p => pc += offset)
         n: bool,
         z: bool,
         p: bool,
         offset: i16,
-    }, // Branch (If n/z/p => pc += offset)
+    },
     JMP {
+        // Jump (pc <- base_r)
         base_r: u16,
-    }, // Jump (pc <- base_r)
+    },
     RET, // Return from subroutine (JMP) (pc <- r7)
     JSR {
+        // Jump To Subroutine (pc <- pc + offset)
         offset: i16,
-    }, // Jump To Subroutine (pc <- pc + offset)
+    },
     JSRR, // Jump to Subroutine (pc <- base_r)
     LD {
+        // Load Direct from memory (dr <- mem[pc+offset])
         dr: u16,
         offset: i16,
-    }, // Load Direct from memory (dr <- mem[pc+offset])
+    },
     LDI {
+        // Load Indirect from memory (dr <- mem[mem[pc+offset]])
         dr: u16,
         offset: i16,
-    }, // Load Indirect from memory (dr <- mem[mem[pc+offset]])
+    },
     LDR {
+        // Load Base+Offset (dr <- mem[base_r + offset])
         dr: u16,
         base_r: u16,
         offset: i16,
-    }, // Load Base+Offset (dr <- mem[base_r + offset])
+    },
     LEA {
+        // Load Effective Address (dr <- pc + offset)
         dr: u16,
         offset: i16,
-    }, // Load Effective Address (dr <- pc + offset)
+    },
     NOT {
+        // Bitwise Not (dr <- ~sr)
         dr: u16,
         sr: u16,
-    }, // Bitwise Not (dr <- ~sr)
+    },
     RTI, // Return From Interrupt
     ST {
+        // Store (mem[pc+offset] <- sr)
         sr: u16,
         offset: i16,
-    }, // Store (mem[pc+offset] <- sr)
+    },
     STI {
+        // Store Indirect (mem[mem[pc+offset]] <- sr)
         sr: u16,
         offset: i16,
-    }, // Store Indirect (mem[mem[pc+offset]] <- sr)
+    },
     STR {
+        // Store Base+Offset (mem[sr+offset] <- sr)
         sr: u16,
         base_r: u16,
         offset: i16,
-    }, // Store Base+Offset (mem[sr+offset] <- sr)
-    TRAP { trap_vec: u16 }, // Execute Trap
+    },
+    TRAP {
+        // Execute Trap
+        trap_vec: u16,
+    },
     RESERVED, // Unused. Throws an Illegal Opcode Exception.
 }
 
@@ -211,9 +227,9 @@ fn decode_instruction(instruction: u16) -> Option<Opcode> {
         }
         0b1111 => {
             Some(Opcode::TRAP {
-                trap_vec: instruction & 0b1111_1111 // This is 0-extended, not sign-extended
+                trap_vec: instruction & 0b1111_1111, // This is 0-extended, not sign-extended
             })
-        },
+        }
         0b1101 => Some(Opcode::RESERVED),
         _ => {
             println!("Unknown instruction {op}");
@@ -250,7 +266,8 @@ fn main() {
     read_data_into_memory(&data, &mut memory);
 
     let mut pc: usize = 0x3000;
-    while pc < 0x3000 + 20 { // Arbitrary limit to debug for now
+    while pc < 0x3000 + 20 {
+        // Arbitrary limit to debug for now
         let op = decode_instruction(memory[pc]);
         dbg!(op);
         pc += 1;

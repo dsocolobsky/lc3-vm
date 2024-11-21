@@ -98,8 +98,8 @@ impl TryFrom<u16> for Opcode {
         match op {
             0b0001 => {
                 // ADD
-                let dr = instruction & 0b0000_111_000_0_00_000 >> 9;
-                let sr1 = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let dr = (instruction & 0b0000_111_000_0_00_000) >> 9;
+                let sr1 = (instruction & 0b0000_000_111_0_00_000) >> 6;
                 if instruction & (1 << 5) == 0 {
                     // Use sr2 register as 2nd argument
                     let sr2 = instruction & 0b0000_000_000_0_00_111;
@@ -120,8 +120,8 @@ impl TryFrom<u16> for Opcode {
             }
             0b0101 => {
                 // AND , this is the same decode case as ADD
-                let dr = instruction & 0b0000_111_000_0_00_000 >> 9;
-                let sr1 = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let dr = (instruction & 0b0000_111_000_0_00_000u16) >> 9;
+                let sr1 = (instruction & 0b0000_000_111_0_00_000u16) >> 6;
                 if instruction & (1 << 5) == 0 {
                     // Use sr2 register as 2nd argument
                     let sr2 = instruction & 0b0000_000_000_0_00_111;
@@ -151,7 +151,7 @@ impl TryFrom<u16> for Opcode {
             }
             0b1100 => {
                 // JMP/RET
-                let base_r = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let base_r = (instruction & 0b0000_000_111_0_00_000) >> 6;
                 if base_r == 0b111 {
                     Ok(Opcode::RET)
                 } else {

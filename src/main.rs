@@ -3,25 +3,69 @@
 
 mod opcodes;
 
-use std::fs;
+use crate::opcodes::Argument;
 use crate::opcodes::Opcode;
+use std::fs;
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
 const REG_IDX_COND: usize = 9;
+const PC_START_POS: u16 = 0x3000;
 
 enum ConditionFlag {
     Pos,
     Neg,
     Zero,
-    None
+    None,
 }
 
 struct VM {
+    running: bool,
     registers: [u16; 10],
+    memory: [u16; MEMORY_SIZE],
 }
 
 impl VM {
+    fn new(data: &[u8]) -> Self {
+        let mut vm = VM {
+            running: false,
+            registers: [0; 10],
+            memory: [0; MEMORY_SIZE],
+        };
+        vm.read_data_into_memory(data);
+        vm.set_pc(PC_START_POS);
+        vm.set_cond_flag(ConditionFlag::None);
+        vm
+    }
+
+    fn run(&mut self) {
+        self.running = true;
+        let mut cycle_count = 0; // For debug purposes
+        while self.running && cycle_count < 30 {
+            // Fetch
+            let instruction = self.fetch();
+            self.advance_pc();
+
+            // Decode
+            let Ok(opcode) = Opcode::try_from(instruction) else {
+                println!("ERR: {instruction} not recognized!");
+                self.running = false;
+                break;
+            };
+
+            // Execute
+            self.execute(opcode);
+            cycle_count += 1;
+        }
+    }
+
+    fn fetch(&self) -> u16 {
+        *self
+            .memory
+            .get(self.pc() as usize)
+            .expect("Out of bounds fetch")
+    }
+
     fn pc(&self) -> u16 {
         self.registers[REG_IDX_PC]
     }
@@ -55,6 +99,100 @@ impl VM {
             ConditionFlag::None => 0,
         }
     }
+
+    fn read_data_into_memory(&mut self, data: &[u8]) {
+        let origin = join_u8(data[0], data[1]) as usize;
+        println!("Loading data at origin {:#x}", origin);
+        let mut mem_i: usize = origin;
+        let mut data_i: usize = 2; // Skip the origin
+        while mem_i < MEMORY_SIZE - 1 && data_i < data.len() {
+            let word = join_u8(data[data_i], data[data_i + 1]);
+            self.memory[mem_i] = word;
+            mem_i += 1;
+            data_i += 2;
+        }
+    }
+
+    fn execute(&mut self, opcode: Opcode) {
+        match opcode {
+            Opcode::ADD {
+                dr: dr,
+                sr1: sr1,
+                sr2: Argument::Reg(reg),
+            } => {
+                dbg!(&opcode);
+            }
+            Opcode::ADD {
+                dr,
+                sr1,
+                sr2: Argument::Immediate(val),
+            } => {
+                dbg!(&opcode);
+            }
+            Opcode::AND {
+                dr,
+                sr1,
+                sr2: Argument::Reg(reg),
+            } => {
+                dbg!(&opcode);
+            }
+            Opcode::AND {
+                dr,
+                sr1,
+                sr2: Argument::Immediate(val),
+            } => {
+                dbg!(&opcode);
+            }
+            Opcode::BR { n, z, p, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::JMP { base_r } => {
+                dbg!(&opcode);
+            }
+            Opcode::RET => {
+                dbg!(&opcode);
+            }
+            Opcode::JSR { offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::JSRR => {
+                dbg!(&opcode);
+            }
+            Opcode::LD { dr, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::LDI { dr, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::LDR { dr, base_r, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::LEA { dr, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::NOT { dr, sr } => {
+                dbg!(&opcode);
+            }
+            Opcode::RTI => {
+                dbg!(&opcode);
+            }
+            Opcode::ST { sr, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::STI { sr, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::STR { sr, base_r, offset } => {
+                dbg!(&opcode);
+            }
+            Opcode::TRAP { trap_vec } => {
+                dbg!(&opcode);
+            }
+            Opcode::RESERVED => {
+                dbg!(&opcode);
+            }
+        }
+    }
 }
 
 // I'm supposed to swap endianness according to docs but so far it was working,
@@ -65,32 +203,11 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
     (hi << 8) | lo
 }
 
-fn read_data_into_memory(data: &[u8], memory: &mut [u16]) {
-    let origin = join_u8(data[0], data[1]) as usize;
-    println!("Loading data at origin {:#x}", origin);
-    let mut mem_i: usize = origin;
-    let mut data_i: usize = 2; // Skip the origin
-    while mem_i < MEMORY_SIZE - 1 && data_i < data.len() {
-        let word = join_u8(data[data_i], data[data_i + 1]);
-        memory[mem_i] = word;
-        mem_i += 1;
-        data_i += 2;
-    }
-}
-
 fn main() {
-    let mut memory: [u16; MEMORY_SIZE] = [0; MEMORY_SIZE];
     println!("lc3-vm");
     let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
-    read_data_into_memory(&data, &mut memory);
-
-    let mut pc: usize = 0x3000;
-    while pc < 0x3000 + 20 {
-        // Arbitrary limit to debug for now
-        let op = Opcode::try_from(memory[pc]).expect("Unknown opcode");
-        dbg!(op);
-        pc += 1;
-    }
+    let mut vm = VM::new(&data);
+    vm.run();
 }
 
 #[cfg(test)]
@@ -108,13 +225,12 @@ mod tests {
     fn test_read_data_in_le() {
         // Memory offset is 0x3000
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
-        let mut memory: [u16; MEMORY_SIZE] = [0; MEMORY_SIZE];
-        read_data_into_memory(&data, &mut memory);
+        let vm = VM::new(&data);
         for i in 0x3000_usize..0x3000 + 4 {
-            println!("{:x?}", memory[i]);
+            println!("{:x?}", vm.memory[i]);
         }
         for i in 0..0x3000 {
-            assert_eq!(memory[i], 0);
+            assert_eq!(vm.memory[i], 0);
         }
         assert_eq!(memory[0x3000], 0xcafe);
         assert_eq!(memory[0x3001], 0xbabe);

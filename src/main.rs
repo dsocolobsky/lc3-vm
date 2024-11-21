@@ -2,11 +2,14 @@
 #![allow(clippy::upper_case_acronyms)]
 
 mod opcodes;
+mod terminal;
 
 use crate::opcodes::Argument;
 use crate::opcodes::Opcode;
 use std::cmp::PartialEq;
-use std::fs;
+use std::{fs, io};
+use std::io::{StdinLock, StdoutLock, Write};
+use crate::terminal::Terminal;
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
@@ -32,18 +35,20 @@ enum TrapCode {
     Halt,
 }
 
-struct VM {
+struct VM<'a> {
     running: bool,
     registers: [u16; 10],
     memory: [u16; MEMORY_SIZE],
+    terminal: Terminal<'a>,
 }
 
-impl VM {
+impl VM<'_> {
     fn new(data: &[u8]) -> Self {
         let mut vm = VM {
             running: false,
             registers: [0; 10],
             memory: [0; MEMORY_SIZE],
+            terminal: Terminal::new(),
         };
         vm.read_data_into_memory(data);
         vm.set_pc(PC_START_POS);
@@ -53,6 +58,9 @@ impl VM {
 
     fn run(&mut self) {
         self.running = true;
+
+        self.terminal.clear();
+
         let mut cycle_count = 0; // For debug purposes
         while self.running && cycle_count < 30 {
             // Fetch
@@ -69,7 +77,6 @@ impl VM {
             // Execute
             self.execute(opcode);
             cycle_count += 1;
-            dbg!(&self.registers);
         }
     }
 
@@ -227,14 +234,14 @@ impl VM {
                 println!("GETC: Not implemented");
             }
             TrapCode::Out => {
-                let ch = self.registers[0];
-                print!("OUT: {}", ch);
+                let ch = self.registers[0] as u8;
+                self.terminal.out(ch);
             }
             TrapCode::Puts => {
-                print!("PUTS: ");
                 let mut i = self.registers[0] as usize;
                 while self.memory[i] != 0x0000 {
-                    print!("{}", self.memory[i]);
+                    let c = self.memory[i] as u8;
+                    self.terminal.out(c);
                     i += 1;
                 }
             }
@@ -242,14 +249,13 @@ impl VM {
                 println!("IN: Not implemented");
             }
             TrapCode::Putsp => {
-                print!("PUTSP: ");
                 let mut i = self.registers[0] as usize;
                 while self.memory[i] != 0x0000 {
                     let ch = self.memory[i];
                     let (ch1, ch2) = (ch & 0xFF, ch >> 8);
-                    print!("{}", ch1);
+                    self.terminal.out(ch1 as u8);
                     if ch2 != 0x00 {
-                        print!("{}", ch2);
+                        self.terminal.out(ch2 as u8);
                     }
                     i += 1;
                 }
@@ -274,7 +280,6 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
 }
 
 fn main() {
-    println!("lc3-vm");
     let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();

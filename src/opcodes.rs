@@ -1,5 +1,5 @@
 #[derive(Debug)]
-enum Argument {
+pub enum Argument {
     Reg(u16),
     Immediate(i16),
 }

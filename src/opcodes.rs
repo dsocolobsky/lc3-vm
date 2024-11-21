@@ -1,3 +1,5 @@
+use crate::TrapCode;
+
 #[derive(Debug)]
 pub enum Argument {
     Reg(usize),
@@ -83,7 +85,7 @@ pub enum Opcode {
     },
     TRAP {
         // Execute Trap
-        trap_vec: u16,
+        trap_code: TrapCode,
     },
     RESERVED, // Unused. Throws an Illegal Opcode Exception.
 }
@@ -230,9 +232,17 @@ impl TryFrom<u16> for Opcode {
                 })
             }
             0b1111 => {
-                Ok(Opcode::TRAP {
-                    trap_vec: instruction & 0b1111_1111, // This is 0-extended, not sign-extended
-                })
+                let trap_code_hex = instruction & 0b1111_1111;
+                let trap_code = match trap_code_hex {
+                    0x20 => TrapCode::Getc,
+                    0x21 => TrapCode::Out,
+                    0x22 => TrapCode::Puts,
+                    0x23 => TrapCode::In,
+                    0x24 => TrapCode::Putsp,
+                    0x25 => TrapCode::Halt,
+                    _ => panic!("Unknown trap code {trap_code_hex} !"),
+                };
+                Ok(Opcode::TRAP { trap_code })
             }
             0b1101 => Ok(Opcode::RESERVED),
             _ => {

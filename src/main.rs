@@ -22,6 +22,16 @@ enum ConditionFlag {
     None,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum TrapCode {
+    Getc,
+    Out,
+    Puts,
+    In,
+    Putsp,
+    Halt,
+}
+
 struct VM {
     running: bool,
     registers: [u16; 10],
@@ -64,10 +74,7 @@ impl VM {
     }
 
     fn fetch(&self) -> u16 {
-        *self
-            .memory
-            .get(self.pc())
-            .expect("Out of bounds fetch")
+        *self.memory.get(self.pc()).expect("Out of bounds fetch")
     }
 
     fn cond_flag(&self) -> ConditionFlag {
@@ -179,9 +186,9 @@ impl VM {
                 let dir = base_r_with_offset(base_r, offset);
                 self.memory[dir] = self.registers[sr];
             }
-            Opcode::TRAP { trap_vec } => {
+            Opcode::TRAP { trap_code } => {
                 self.registers[REG_RET] = self.pc() as u16;
-                self.set_pc(self.memory[trap_vec as usize] as usize);
+                self.handle_trap_code(trap_code);
             }
             Opcode::RESERVED => {
                 dbg!(&opcode);
@@ -212,6 +219,45 @@ impl VM {
 
     fn read_with_offset(&self, offset: i16) -> u16 {
         self.read(self.pc_with_offset(offset))
+    }
+
+    fn handle_trap_code(&mut self, trap_code: TrapCode) {
+        match trap_code {
+            TrapCode::Getc => {
+                println!("GETC: Not implemented");
+            }
+            TrapCode::Out => {
+                let ch = self.registers[0];
+                print!("OUT: {}", ch);
+            }
+            TrapCode::Puts => {
+                print!("PUTS: ");
+                let mut i = self.registers[0] as usize;
+                while self.memory[i] != 0x0000 {
+                    print!("{}", self.memory[i]);
+                    i += 1;
+                }
+            }
+            TrapCode::In => {
+                println!("IN: Not implemented");
+            }
+            TrapCode::Putsp => {
+                print!("PUTSP: ");
+                let mut i = self.registers[0] as usize;
+                while self.memory[i] != 0x0000 {
+                    let ch = self.memory[i];
+                    let (ch1, ch2) = (ch & 0xFF, ch >> 8);
+                    print!("{}", ch1);
+                    if ch2 != 0x00 {
+                        print!("{}", ch2);
+                    }
+                    i += 1;
+                }
+            }
+            TrapCode::Halt => {
+                self.running = false;
+            }
+        }
     }
 }
 

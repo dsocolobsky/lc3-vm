@@ -129,71 +129,109 @@ impl VM<'_> {
                 dr,
                 sr1,
                 sr2: Argument::Reg(sr2),
-            } => self.registers[dr] = self.registers[sr1] + self.registers[sr2],
+            } => {
+                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr1}]");
+                self.registers[dr] = self.registers[sr1] + self.registers[sr2]
+            },
             Opcode::ADD {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
+                println!("ADD reg[{dr}] <- reg[{sr1}] + {val}");
                 self.registers[dr] = (self.registers[sr1] as i16).wrapping_add(val) as u16;
             }
             Opcode::AND {
                 dr,
                 sr1,
                 sr2: Argument::Reg(sr2),
-            } => self.registers[dr] = self.registers[sr1] & self.registers[sr2],
+            } => {
+                println!("AND reg[{dr}] <- reg[{sr1}] & reg[{sr2}]");
+                self.registers[dr] = self.registers[sr1] & self.registers[sr2]
+            }
             Opcode::AND {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
-            } => self.registers[dr] = ((self.registers[sr1] as i16) & val) as u16,
+            } => {
+                println!("AND reg[{dr}] <- reg[{sr1}] & {val}");
+                self.registers[dr] = ((self.registers[sr1] as i16) & val) as u16
+            },
             Opcode::BR { n, z, p, offset } => {
                 if self.cond_flag_any_set() {
+                    println!("BR: Taken");
                     self.set_pc(self.pc_with_offset(offset));
+                } else {
+                    println!("BR: Not Taken");
                 }
             }
             Opcode::JMP { base_r } => {
+                println!("JMP {:#0x}", base_r);
                 self.set_pc(self.registers[base_r] as usize);
             }
             Opcode::RET => {
-                self.set_pc(self.registers[REG_RET] as usize);
+                let dir = self.registers[REG_RET] as usize;
+                println!("RET {:#0x}", dir);
+                self.set_pc(dir);
             }
             Opcode::JSR { offset } => {
-                self.set_pc(self.pc_with_offset(offset));
+                let dir = self.pc_with_offset(offset);
+                println!("JSR {:#0x}+{} = {:#0x}", self.pc(), offset, dir);
+                self.set_pc(dir);
             }
             Opcode::JSRR { base_r } => {
+                println!("JSRR {:#0x}", self.registers[base_r]);
                 self.set_pc(self.registers[base_r] as usize);
             }
-            Opcode::LD { dr, offset } => self.registers[dr] = self.read_with_offset(offset),
+            Opcode::LD { dr, offset } => {
+                let data = self.read_with_offset(offset);
+                println!("LD reg[{dr}] <- {data}");
+                self.registers[dr] = data;
+            },
             Opcode::LDI { dr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
+                println!("LDI reg[{dr}] <- mem[{dir}]");
                 self.registers[dr] = self.read(dir);
             }
             Opcode::LDR { dr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
+                println!("LDR reg[{dr}] <- mem[{dir}]");
                 self.registers[dr] = self.read(dir);
             }
             Opcode::LEA { dr, offset } => {
-                self.registers[dr] = self.pc_with_offset(offset) as u16;
+                let dir = self.pc_with_offset(offset) as u16;
+                println!("LEA reg[{}] <- {:#0x}", dr, dir);
+                self.registers[dr] = dir;
             }
             Opcode::NOT { dr, sr } => {
-                self.registers[dr] = !sr as u16;
+                let res = !self.registers[sr];
+                println!("NOT reg[{}] <- !reg[{}] = {:#0x}", dr, sr, res);
+                self.registers[dr] = res;
             }
             Opcode::RTI => {
+                println!("RTI");
                 dbg!(&opcode);
             }
             Opcode::ST { sr, offset } => {
-                self.memory[self.pc_with_offset(offset)] = self.registers[sr];
+                let dir = self.pc_with_offset(offset);
+                let val = self.registers[sr];
+                println!("ST mem[{:#0x}+{:#0x} = {:#0x}] <- reg[{}] = {:#0x}", self.pc(), offset, dir, sr, val);
+                self.memory[dir] = val;
             }
             Opcode::STI { sr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
+                let val = self.registers[sr];
+                println!("STI mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
                 self.memory[dir] = self.registers[sr];
             }
             Opcode::STR { sr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
-                self.memory[dir] = self.registers[sr];
+                let val = self.registers[sr];
+                println!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
+                self.memory[dir] = val;
             }
             Opcode::TRAP { trap_code } => {
+                println!("TRAP {:?}", trap_code);
                 self.registers[REG_RET] = self.pc() as u16;
                 self.handle_trap_code(trap_code);
             }

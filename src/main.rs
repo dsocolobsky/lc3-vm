@@ -62,7 +62,7 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        while self.running && cycle_count < 30 {
+        while self.running && cycle_count < 3000 {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
@@ -130,32 +130,40 @@ impl VM<'_> {
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr1}]");
-                self.registers[dr] = self.registers[sr1] + self.registers[sr2]
+                let res = self.registers[sr1] + self.registers[sr2];
+                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr1}] = {res}");
+                self.registers[dr] = self.registers[sr1] + self.registers[sr2];
+                self.set_flags(res as i16);
             },
             Opcode::ADD {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                println!("ADD reg[{dr}] <- reg[{sr1}] + {val}");
-                self.registers[dr] = (self.registers[sr1] as i16).wrapping_add(val) as u16;
+                let res = (self.registers[sr1] as i16).wrapping_add(val) as u16;
+                println!("ADD reg[{dr}] <- reg[{sr1}] + {val} = {res}");
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             }
             Opcode::AND {
                 dr,
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                println!("AND reg[{dr}] <- reg[{sr1}] & reg[{sr2}]");
-                self.registers[dr] = self.registers[sr1] & self.registers[sr2]
+                let res = self.registers[sr1] & self.registers[sr2];
+                println!("AND reg[{}] <- reg[{}] & reg[{}] = {:#0x}", dr, sr1, sr2, res);
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             }
             Opcode::AND {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                println!("AND reg[{dr}] <- reg[{sr1}] & {val}");
-                self.registers[dr] = ((self.registers[sr1] as i16) & val) as u16
+                let res = ((self.registers[sr1] as i16) & val) as u16;
+                println!("AND reg[{}] <- reg[{}] & {:#0x} = {:#0x}", dr, sr1, val, res);
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             },
             Opcode::BR { n, z, p, offset } => {
                 if self.cond_flag_any_set() {
@@ -184,29 +192,36 @@ impl VM<'_> {
                 self.set_pc(self.registers[base_r] as usize);
             }
             Opcode::LD { dr, offset } => {
-                let data = self.read_with_offset(offset);
-                println!("LD reg[{dr}] <- {data}");
-                self.registers[dr] = data;
+                let res = self.read_with_offset(offset);
+                println!("LD reg[{dr}] <- {res}");
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             },
             Opcode::LDI { dr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
-                println!("LDI reg[{dr}] <- mem[{dir}]");
-                self.registers[dr] = self.read(dir);
+                let res = self.read(dir);
+                println!("LDI reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}", dr, self.pc(), offset, dir, res);
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             }
             Opcode::LDR { dr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
-                println!("LDR reg[{dr}] <- mem[{dir}]");
-                self.registers[dr] = self.read(dir);
+                let res = self.read(dir);
+                println!("LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}", dr, base_r, offset, dir, res);
+                self.registers[dr] = res;
+                self.set_flags(res as i16);
             }
             Opcode::LEA { dr, offset } => {
                 let dir = self.pc_with_offset(offset) as u16;
                 println!("LEA reg[{}] <- {:#0x}", dr, dir);
                 self.registers[dr] = dir;
+                self.set_flags(dir as i16);
             }
             Opcode::NOT { dr, sr } => {
                 let res = !self.registers[sr];
                 println!("NOT reg[{}] <- !reg[{}] = {:#0x}", dr, sr, res);
                 self.registers[dr] = res;
+                self.set_flags(res as i16);
             }
             Opcode::RTI => {
                 println!("RTI");
@@ -264,6 +279,17 @@ impl VM<'_> {
 
     fn read_with_offset(&self, offset: i16) -> u16 {
         self.read(self.pc_with_offset(offset))
+    }
+
+    fn set_flags(&mut self, res: i16) {
+        let cond = if res == 0 {
+            ConditionFlag::Zero
+        } else if res > 0 {
+            ConditionFlag::Pos
+        } else {
+            ConditionFlag::Neg
+        };
+        self.set_cond_flag(cond);
     }
 
     fn handle_trap_code(&mut self, trap_code: TrapCode) {

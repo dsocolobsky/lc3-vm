@@ -5,13 +5,16 @@ mod opcodes;
 
 use crate::opcodes::Argument;
 use crate::opcodes::Opcode;
+use std::cmp::PartialEq;
 use std::fs;
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
 const REG_IDX_COND: usize = 9;
-const PC_START_POS: u16 = 0x3000;
+const PC_START_POS: usize = 0x3000;
+const REG_RET: usize = 7;
 
+#[derive(PartialEq, Eq)]
 enum ConditionFlag {
     Pos,
     Neg,
@@ -56,26 +59,15 @@ impl VM {
             // Execute
             self.execute(opcode);
             cycle_count += 1;
+            dbg!(&self.registers);
         }
     }
 
     fn fetch(&self) -> u16 {
         *self
             .memory
-            .get(self.pc() as usize)
+            .get(self.pc())
             .expect("Out of bounds fetch")
-    }
-
-    fn pc(&self) -> u16 {
-        self.registers[REG_IDX_PC]
-    }
-
-    fn set_pc(&mut self, new_pc: u16) {
-        self.registers[REG_IDX_PC] = new_pc;
-    }
-
-    fn advance_pc(&mut self) {
-        self.registers[REG_IDX_PC] += 1;
     }
 
     fn cond_flag(&self) -> ConditionFlag {
@@ -89,6 +81,10 @@ impl VM {
         } else {
             ConditionFlag::None
         }
+    }
+
+    fn cond_flag_any_set(&self) -> bool {
+        self.cond_flag() != ConditionFlag::None
     }
 
     fn set_cond_flag(&mut self, cond: ConditionFlag) {
@@ -116,83 +112,111 @@ impl VM {
     fn execute(&mut self, opcode: Opcode) {
         match opcode {
             Opcode::ADD {
-                dr: dr,
-                sr1: sr1,
-                sr2: Argument::Reg(reg),
-            } => {
-                dbg!(&opcode);
-            }
+                dr,
+                sr1,
+                sr2: Argument::Reg(sr2),
+            } => self.registers[dr] = self.registers[sr1] + self.registers[sr2],
             Opcode::ADD {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                dbg!(&opcode);
+                self.registers[dr] = (self.registers[sr1] as i16).wrapping_add(val) as u16;
             }
             Opcode::AND {
                 dr,
                 sr1,
-                sr2: Argument::Reg(reg),
-            } => {
-                dbg!(&opcode);
-            }
+                sr2: Argument::Reg(sr2),
+            } => self.registers[dr] = self.registers[sr1] & self.registers[sr2],
             Opcode::AND {
                 dr,
                 sr1,
                 sr2: Argument::Immediate(val),
-            } => {
-                dbg!(&opcode);
-            }
+            } => self.registers[dr] = ((self.registers[sr1] as i16) & val) as u16,
             Opcode::BR { n, z, p, offset } => {
-                dbg!(&opcode);
+                if self.cond_flag_any_set() {
+                    self.set_pc(self.pc_with_offset(offset));
+                }
             }
             Opcode::JMP { base_r } => {
-                dbg!(&opcode);
+                self.set_pc(self.registers[base_r] as usize);
             }
             Opcode::RET => {
-                dbg!(&opcode);
+                self.set_pc(self.registers[REG_RET] as usize);
             }
             Opcode::JSR { offset } => {
-                dbg!(&opcode);
+                self.set_pc(self.pc_with_offset(offset));
             }
-            Opcode::JSRR => {
-                dbg!(&opcode);
+            Opcode::JSRR { base_r } => {
+                self.set_pc(self.registers[base_r] as usize);
             }
-            Opcode::LD { dr, offset } => {
-                dbg!(&opcode);
-            }
+            Opcode::LD { dr, offset } => self.registers[dr] = self.read_with_offset(offset),
             Opcode::LDI { dr, offset } => {
-                dbg!(&opcode);
+                let dir = self.read_with_offset(offset) as usize;
+                self.registers[dr] = self.read(dir);
             }
             Opcode::LDR { dr, base_r, offset } => {
-                dbg!(&opcode);
+                let dir = base_r_with_offset(base_r, offset);
+                self.registers[dr] = self.read(dir);
             }
             Opcode::LEA { dr, offset } => {
-                dbg!(&opcode);
+                self.registers[dr] = self.pc_with_offset(offset) as u16;
             }
             Opcode::NOT { dr, sr } => {
-                dbg!(&opcode);
+                self.registers[dr] = !sr as u16;
             }
             Opcode::RTI => {
                 dbg!(&opcode);
             }
             Opcode::ST { sr, offset } => {
-                dbg!(&opcode);
+                self.memory[self.pc_with_offset(offset)] = self.registers[sr];
             }
             Opcode::STI { sr, offset } => {
-                dbg!(&opcode);
+                let dir = self.read_with_offset(offset) as usize;
+                self.memory[dir] = self.registers[sr];
             }
             Opcode::STR { sr, base_r, offset } => {
-                dbg!(&opcode);
+                let dir = base_r_with_offset(base_r, offset);
+                self.memory[dir] = self.registers[sr];
             }
             Opcode::TRAP { trap_vec } => {
-                dbg!(&opcode);
+                self.registers[REG_RET] = self.pc() as u16;
+                self.set_pc(self.memory[trap_vec as usize] as usize);
             }
             Opcode::RESERVED => {
                 dbg!(&opcode);
+                panic!("Reserved Instruction");
             }
         }
     }
+
+    fn pc(&self) -> usize {
+        self.registers[REG_IDX_PC] as usize
+    }
+
+    fn set_pc(&mut self, new_pc: usize) {
+        self.registers[REG_IDX_PC] = new_pc as u16;
+    }
+
+    fn advance_pc(&mut self) {
+        self.registers[REG_IDX_PC] += 1;
+    }
+
+    fn pc_with_offset(&self, offset: i16) -> usize {
+        (self.pc() as i16).wrapping_add(offset) as usize // TODO is this ok?
+    }
+
+    fn read(&self, position: usize) -> u16 {
+        *self.memory.get(position).expect("Out of bounds read")
+    }
+
+    fn read_with_offset(&self, offset: i16) -> u16 {
+        self.read(self.pc_with_offset(offset))
+    }
+}
+
+fn base_r_with_offset(base_r: usize, offset: i16) -> usize {
+    (base_r as i16).wrapping_add(offset) as usize
 }
 
 // I'm supposed to swap endianness according to docs but so far it was working,
@@ -232,7 +256,7 @@ mod tests {
         for i in 0..0x3000 {
             assert_eq!(vm.memory[i], 0);
         }
-        assert_eq!(memory[0x3000], 0xcafe);
-        assert_eq!(memory[0x3001], 0xbabe);
+        assert_eq!(vm.memory[0x3000], 0xcafe);
+        assert_eq!(vm.memory[0x3001], 0xbabe);
     }
 }

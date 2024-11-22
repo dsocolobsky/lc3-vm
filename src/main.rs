@@ -1,15 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 #![allow(clippy::upper_case_acronyms)]
 
-// Comment/Uncomment for disable/enable debug prints
-/*macro_rules! println {
-    ($($rest:tt)*) => {
-        if std::env::var("DEBUG").is_ok() {
-            std::println!($($rest)*);
-        }
-    }
-}*/
-
 mod opcodes;
 mod terminal;
 

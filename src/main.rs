@@ -1,15 +1,25 @@
 #![allow(clippy::unusual_byte_groupings)]
 #![allow(clippy::upper_case_acronyms)]
 
+// Comment/Uncomment for disable/enable debug prints
+/*macro_rules! println {
+    ($($rest:tt)*) => {
+        if std::env::var("DEBUG").is_ok() {
+            std::println!($($rest)*);
+        }
+    }
+}*/
+
+
 mod opcodes;
 mod terminal;
 
 use crate::opcodes::Argument;
 use crate::opcodes::Opcode;
-use std::cmp::PartialEq;
-use std::{fs, io};
-use std::io::{StdinLock, StdoutLock, Write};
 use crate::terminal::Terminal;
+use std::cmp::PartialEq;
+use std::io::{Write};
+use std::{fs};
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
@@ -62,7 +72,7 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        while self.running && cycle_count < 3000 {
+        while self.running && cycle_count < 20 {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
@@ -76,6 +86,7 @@ impl VM<'_> {
 
             // Execute
             self.execute(opcode);
+            println!("r2: {}", self.registers[2]);
             cycle_count += 1;
         }
     }
@@ -134,7 +145,7 @@ impl VM<'_> {
                 println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr1}] = {res}");
                 self.registers[dr] = self.registers[sr1] + self.registers[sr2];
                 self.set_flags(res as i16);
-            },
+            }
             Opcode::ADD {
                 dr,
                 sr1,
@@ -151,7 +162,10 @@ impl VM<'_> {
                 sr2: Argument::Reg(sr2),
             } => {
                 let res = self.registers[sr1] & self.registers[sr2];
-                println!("AND reg[{}] <- reg[{}] & reg[{}] = {:#0x}", dr, sr1, sr2, res);
+                println!(
+                    "AND reg[{}] <- reg[{}] & reg[{}] = {:#0x}",
+                    dr, sr1, sr2, res
+                );
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
@@ -161,16 +175,23 @@ impl VM<'_> {
                 sr2: Argument::Immediate(val),
             } => {
                 let res = ((self.registers[sr1] as i16) & val) as u16;
-                println!("AND reg[{}] <- reg[{}] & {:#0x} = {:#0x}", dr, sr1, val, res);
+                println!(
+                    "AND reg[{}] <- reg[{}] & {:#0x} = {:#0x}",
+                    dr, sr1, val, res
+                );
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
-            },
+            }
             Opcode::BR { n, z, p, offset } => {
-                if self.cond_flag_any_set() {
-                    println!("BR: Taken");
-                    self.set_pc(self.pc_with_offset(offset));
-                } else {
-                    println!("BR: Not Taken");
+                let actual_flag = self.cond_flag();
+                match ((n, z, p), actual_flag) {
+                    ((true, _, _), ConditionFlag::Neg) |
+                    ((_, true, _), ConditionFlag::Zero) |
+                    ((_, _, true), ConditionFlag::Pos) => {
+                        println!("BR: Taken, n={n}, z={z}, p={p} | offset = {offset}");
+                        self.set_pc(self.pc_with_offset(offset));
+                    },
+                    _ => println!("BR: Not Taken, n={n}, z={z}, p={p} | offset = {offset}"),
                 }
             }
             Opcode::JMP { base_r } => {
@@ -196,18 +217,28 @@ impl VM<'_> {
                 println!("LD reg[{dr}] <- {res}");
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
-            },
+            }
             Opcode::LDI { dr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
                 let res = self.read(dir);
-                println!("LDI reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}", dr, self.pc(), offset, dir, res);
+                println!(
+                    "LDI reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
+                    dr,
+                    self.pc(),
+                    offset,
+                    dir,
+                    res
+                );
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
             Opcode::LDR { dr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
                 let res = self.read(dir);
-                println!("LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}", dr, base_r, offset, dir, res);
+                println!(
+                    "LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
+                    dr, base_r, offset, dir, res
+                );
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
@@ -230,7 +261,14 @@ impl VM<'_> {
             Opcode::ST { sr, offset } => {
                 let dir = self.pc_with_offset(offset);
                 let val = self.registers[sr];
-                println!("ST mem[{:#0x}+{:#0x} = {:#0x}] <- reg[{}] = {:#0x}", self.pc(), offset, dir, sr, val);
+                println!(
+                    "ST mem[{:#0x}+{:#0x} = {:#0x}] <- reg[{}] = {:#0x}",
+                    self.pc(),
+                    offset,
+                    dir,
+                    sr,
+                    val
+                );
                 self.memory[dir] = val;
             }
             Opcode::STI { sr, offset } => {
@@ -344,7 +382,7 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
 }
 
 fn main() {
-    let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
+    let data: Vec<u8> = fs::read("test.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
 }

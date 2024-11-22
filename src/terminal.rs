@@ -1,9 +1,10 @@
 use std::io;
 use std::io::{StdinLock, StdoutLock, Write};
+use termion::input::{Keys, TermRead};
 
 pub struct Terminal<'a> {
     stdout: StdoutLock<'a>,
-    stdin: StdinLock<'a>,
+    pub stdin: Keys<StdinLock<'a>>,
 }
 
 impl Terminal<'_> {
@@ -12,7 +13,8 @@ impl Terminal<'_> {
         let mut stdout = stdout.lock();
         let stdin = io::stdin();
         let stdin = stdin.lock();
-        Self { stdout, stdin }
+        let keys = stdin.keys();
+        Self { stdout, stdin: keys }
     }
     pub(crate) fn clear(&mut self) {
         write!(self.stdout, "{}", termion::clear::All).unwrap();

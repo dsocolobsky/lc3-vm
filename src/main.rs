@@ -20,12 +20,16 @@ use crate::terminal::Terminal;
 use std::cmp::PartialEq;
 use std::io::{Write};
 use std::{fs};
+use std::fmt::{Debug, Formatter};
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
 const REG_IDX_COND: usize = 9;
 const PC_START_POS: usize = 0x3000;
 const REG_RET: usize = 7;
+
+const MR_KBSR: usize = 0xFE00; // Keyboard Status memory mapping
+const MR_KBDR: usize = 0xFE02;  // Keyboard Data memory mapping
 
 #[derive(PartialEq, Eq)]
 enum ConditionFlag {
@@ -72,7 +76,7 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        while self.running {
+        while self.running && cycle_count < 25 {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
@@ -86,7 +90,7 @@ impl VM<'_> {
 
             // Execute
             self.execute(opcode);
-            println!("r2: {}", self.registers[2]);
+            dbg!(&self);
             cycle_count += 1;
         }
     }
@@ -311,11 +315,27 @@ impl VM<'_> {
         (self.pc() as i16).wrapping_add(offset) as usize // TODO is this ok?
     }
 
-    fn read(&self, position: usize) -> u16 {
+    fn read(&mut self, position: usize) -> u16 {
+        if position == MR_KBSR {
+            // TODO implement
+            // Read a single byte from stdin.
+            println!("MR_KBSR: Press a key and press enter");
+            let b = self.terminal.stdin.next().unwrap().unwrap();
+            dbg!(&b);
+            use termion::event::Key::*;
+            if let Char(ch) = b {
+                println!("MR_KBSR Read {ch}");
+                self.memory[MR_KBSR] = 1 << 15;
+                self.memory[MR_KBDR] = u16::try_from(ch).unwrap();
+            } else {
+                println!("MR_KBSR");
+                self.memory[MR_KBSR] = 0;
+            }
+        }
         *self.memory.get(position).expect("Out of bounds read")
     }
 
-    fn read_with_offset(&self, offset: i16) -> u16 {
+    fn read_with_offset(&mut self, offset: i16) -> u16 {
         self.read(self.pc_with_offset(offset))
     }
 
@@ -366,6 +386,14 @@ impl VM<'_> {
                 self.running = false;
             }
         }
+    }
+}
+
+impl Debug for VM<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[r0={},r1={},r2={},r3={},r4={},r5={},r6={},r7={},PC={:#X},COND={:#X}]\n",
+            self.registers[0],self.registers[1],self.registers[2],self.registers[3],self.registers[4],
+               self.registers[5],self.registers[6],self.registers[7],self.registers[8],self.registers[9])
     }
 }
 

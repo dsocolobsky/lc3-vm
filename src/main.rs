@@ -13,4 +13,5 @@ fn main() {
     let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
+    terminal::restore_terminal_settings();
 }

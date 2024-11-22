@@ -147,7 +147,7 @@ impl VM<'_> {
                 sr2: Argument::Reg(sr2),
             } => {
                 let res = self.registers[sr1] + self.registers[sr2];
-                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr1}] = {res}");
+                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
                 self.registers[dr] = self.registers[sr1] + self.registers[sr2];
                 self.set_flags(res as i16);
             }

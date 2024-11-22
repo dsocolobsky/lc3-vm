@@ -76,7 +76,8 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        while self.running && cycle_count < 25 {
+        let cycle_limit = 50;
+        while self.running && cycle_count < cycle_limit {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
@@ -353,7 +354,15 @@ impl VM<'_> {
     fn handle_trap_code(&mut self, trap_code: TrapCode) {
         match trap_code {
             TrapCode::Getc => {
-                println!("GETC: Not implemented");
+                println!("TRAP GETC: Press a key and press enter");
+                let b = self.terminal.stdin.next().unwrap().unwrap();
+                dbg!(&b);
+                use termion::event::Key::*;
+                if let Char(ch) = b {
+                    println!("TRAP GETC Read {ch}");
+                    self.registers[0] = u16::try_from(ch).unwrap();
+                    self.set_flags(self.registers[0] as i16);
+                }
             }
             TrapCode::Out => {
                 let ch = self.registers[0] as u8;
@@ -368,7 +377,16 @@ impl VM<'_> {
                 }
             }
             TrapCode::In => {
-                println!("IN: Not implemented");
+                // TODO this is pretty much TRAP_GETC
+                println!("TRAP INPUT: Press a key and press enter");
+                let b = self.terminal.stdin.next().unwrap().unwrap();
+                dbg!(&b);
+                use termion::event::Key::*;
+                if let Char(ch) = b {
+                    println!("TRAP INPUT Read {ch}");
+                    self.registers[0] = u16::try_from(ch).unwrap();
+                    self.set_flags(self.registers[0] as i16);
+                }
             }
             TrapCode::Putsp => {
                 let mut i = self.registers[0] as usize;
@@ -410,7 +428,7 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
 }
 
 fn main() {
-    let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
+    let data: Vec<u8> = fs::read("rogue.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
 }

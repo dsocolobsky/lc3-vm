@@ -10,18 +10,21 @@ pub struct Terminal<'a> {
 impl Terminal<'_> {
     pub(crate) fn new() -> Self {
         let stdout = io::stdout();
-        let mut stdout = stdout.lock();
+        let stdout = stdout.lock();
         let stdin = io::stdin();
         let stdin = stdin.lock();
         let keys = stdin.keys();
-        Self { stdout, stdin: keys }
+        Self {
+            stdout,
+            stdin: keys,
+        }
     }
     pub(crate) fn clear(&mut self) {
         write!(self.stdout, "{}", termion::clear::All).unwrap();
     }
 
     pub(crate) fn out(&mut self, c: u8) {
-        self.stdout.write(&[c]).unwrap();
+        self.stdout.write_all(&[c]).unwrap();
     }
 
     pub(crate) fn flush(&mut self) {

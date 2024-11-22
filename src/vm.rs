@@ -120,9 +120,9 @@ impl VM {
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                let res = self.registers[sr1] + self.registers[sr2];
+                let res = u16::wrapping_add(self.registers[sr1],self.registers[sr2]);
                 eprintln!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
-                self.registers[dr] = self.registers[sr1] + self.registers[sr2];
+                self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
             Opcode::ADD {
@@ -130,7 +130,7 @@ impl VM {
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                let res = (self.registers[sr1] as i16).wrapping_add(val) as u16;
+                let res = u16::wrapping_add(self.registers[sr1], val as u16);
                 eprintln!("ADD reg[{dr}] <- reg[{sr1}] + {val} = {res}");
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
@@ -287,7 +287,7 @@ impl VM {
     }
 
     fn pc_with_offset(&self, offset: i16) -> usize {
-        (self.pc() as i16).wrapping_add(offset) as usize // TODO is this ok?
+        u16::wrapping_add(self.pc() as u16, offset as u16) as usize
     }
 
     fn read(&mut self, position: usize) -> u16 {

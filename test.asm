@@ -6,7 +6,6 @@ MAIN
 LOOP
     ADD R2, R2, #-1
     BRp LOOP
-    JMP FINI
 FINI
     HALT
 .END

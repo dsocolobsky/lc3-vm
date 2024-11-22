@@ -72,7 +72,7 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        while self.running && cycle_count < 20 {
+        while self.running {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
@@ -382,7 +382,7 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
 }
 
 fn main() {
-    let data: Vec<u8> = fs::read("test.obj").expect("Failed to load file");
+    let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
 }

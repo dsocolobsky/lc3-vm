@@ -1,33 +1,26 @@
-use std::io;
-use std::io::{StdinLock, StdoutLock, Write};
-use termion::input::{Keys, TermRead};
+use libc::c_int;
+use libc::STDIN_FILENO;
+use termios::*;
 
-pub struct Terminal<'a> {
-    stdout: StdoutLock<'a>,
-    pub stdin: Keys<StdinLock<'a>>,
+pub fn restore_terminal_settings() {
+    let mut term: Termios = Termios::from_fd(STDIN_FILENO).unwrap();
+    //turn on canonical mode and echo mode
+    term.c_lflag |= ICANON | ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &term).unwrap();
 }
 
-impl Terminal<'_> {
-    pub(crate) fn new() -> Self {
-        let stdout = io::stdout();
-        let stdout = stdout.lock();
-        let stdin = io::stdin();
-        let stdin = stdin.lock();
-        let keys = stdin.keys();
-        Self {
-            stdout,
-            stdin: keys,
-        }
-    }
-    pub(crate) fn clear(&mut self) {
-        write!(self.stdout, "{}", termion::clear::All).unwrap();
-    }
+pub fn turn_off_canonical_and_echo_modes() {
+    let mut term: Termios = Termios::from_fd(STDIN_FILENO).unwrap();
+    //turn off canonical mode and echo mode
+    term.c_lflag &= !(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &term).unwrap();
+}
 
-    pub(crate) fn out(&mut self, c: u8) {
-        self.stdout.write_all(&[c]).unwrap();
-    }
+extern "C" {
+    fn getchar() -> c_int;
+}
 
-    pub(crate) fn flush(&mut self) {
-        self.stdout.flush().unwrap()
-    }
+/// `get_char` calls external (C) function getchar using libc.
+pub fn get_char() -> i32 {
+    unsafe { getchar() }
 }

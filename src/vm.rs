@@ -1,8 +1,9 @@
 use crate::opcodes::{Argument, Opcode};
-use crate::terminal::Terminal;
+use crate::terminal;
 use crate::util::{base_r_with_offset, join_u8};
 use std::fmt::{Debug, Formatter};
-
+use std::io;
+use std::io::{Read, Write};
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
@@ -31,20 +32,18 @@ pub(crate) enum TrapCode {
     Halt,
 }
 
-pub struct VM<'a> {
+pub struct VM {
     running: bool,
     registers: [u16; 10],
     memory: [u16; MEMORY_SIZE],
-    terminal: Terminal<'a>,
 }
 
-impl VM<'_> {
+impl VM {
     pub(crate) fn new(data: &[u8]) -> Self {
         let mut vm = VM {
             running: false,
             registers: [0; 10],
             memory: [0; MEMORY_SIZE],
-            terminal: Terminal::new(),
         };
         vm.read_data_into_memory(data);
         vm.set_pc(PC_START_POS);
@@ -54,8 +53,6 @@ impl VM<'_> {
 
     pub(crate) fn run(&mut self) {
         self.running = true;
-
-        self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
         let cycle_limit = 15000000;
@@ -296,26 +293,24 @@ impl VM<'_> {
 
     fn read(&mut self, position: usize) -> u16 {
         if position == MR_KBSR {
-            // TODO implement
-            // Read a single byte from stdin.
-            println!("MR_KBSR: Press a key and press enter");
-            let b = self.terminal.stdin.next().unwrap().unwrap();
-            dbg!(&b);
-            use termion::event::Key::*;
-            if let Char(ch) = b {
-                eprintln!("MR_KBSR Read {ch}");
-                self.memory[MR_KBSR] = 1 << 15;
-                self.memory[MR_KBDR] = u16::try_from(ch).unwrap();
-            } else {
-                eprintln!("MR_KBSR");
-                self.memory[MR_KBSR] = 0;
-            }
+            self.handle_keyboard();
         }
         *self.memory.get(position).expect("Out of bounds read")
     }
 
     fn read_with_offset(&mut self, offset: i16) -> u16 {
         self.read(self.pc_with_offset(offset))
+    }
+
+    fn handle_keyboard(&mut self) {
+        let mut buffer = [0; 1];
+        std::io::stdin().read_exact(&mut buffer).unwrap();
+        if buffer[0] != 0 {
+            self.memory[MR_KBSR] = 1 << 15;
+            self.memory[MR_KBDR] = buffer[0] as u16;
+        } else {
+            self.memory[MR_KBSR] = 0;
+        }
     }
 
     fn set_flags(&mut self, res: i16) {
@@ -330,52 +325,39 @@ impl VM<'_> {
     }
 
     fn handle_trap_code(&mut self, trap_code: TrapCode) {
+        terminal::turn_off_canonical_and_echo_modes();
         match trap_code {
             TrapCode::Getc => {
-                println!("TRAP GETC: Press a key and press enter");
-                let b = self.terminal.stdin.next().unwrap().unwrap();
-                dbg!(&b);
-                use termion::event::Key::*;
-                if let Char(ch) = b {
-                    println!("TRAP GETC Read {ch}");
-                    self.registers[0] = u16::try_from(ch).unwrap();
-                    self.set_flags(self.registers[0] as i16);
-                }
+                self.registers[0] = terminal::get_char() as u16;
+                self.set_flags(self.registers[0] as i16);
             }
             TrapCode::Out => {
                 let ch = self.registers[0] as u8;
-                self.terminal.out(ch);
-                self.terminal.flush();
+                print!("{}", ch as char);
+                io::stdout().flush().expect("Failed to flush");
             }
             TrapCode::Puts => {
                 let mut i = self.registers[0] as usize;
                 while self.memory[i] != 0x0000 {
-                    let c = self.memory[i] as u8;
-                    self.terminal.out(c);
+                    let ch = self.memory[i] as u8;
+                    print!("{}", ch as char);
                     i += 1;
                 }
-                self.terminal.flush();
+                io::stdout().flush().expect("Failed to flush");
             }
             TrapCode::In => {
-                // TODO this is pretty much TRAP_GETC
-                println!("TRAP INPUT: Press a key and press enter");
-                let b = self.terminal.stdin.next().unwrap().unwrap();
-                dbg!(&b);
-                use termion::event::Key::*;
-                if let Char(ch) = b {
-                    println!("TRAP INPUT Read {ch}");
-                    self.registers[0] = u16::try_from(ch).unwrap();
-                    self.set_flags(self.registers[0] as i16);
-                }
+                println!("Enter a character: ");
+                self.registers[0] = terminal::get_char() as u16;
+                self.set_flags(self.registers[0] as i16);
             }
             TrapCode::Putsp => {
                 let mut i = self.registers[0] as usize;
                 while self.memory[i] != 0x0000 {
                     let ch = self.memory[i];
                     let (ch1, ch2) = (ch & 0xFF, ch >> 8);
-                    self.terminal.out(ch1 as u8);
+                    print!("{}", (ch1 as u8) as char);
                     if ch2 != 0x00 {
-                        self.terminal.out(ch2 as u8);
+                        print!("{}", (ch2 as u8) as char);
                     }
                     i += 1;
                 }
@@ -384,10 +366,11 @@ impl VM<'_> {
                 self.running = false;
             }
         }
+        terminal::restore_terminal_settings();
     }
 }
 
-impl Debug for VM<'_> {
+impl Debug for VM {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

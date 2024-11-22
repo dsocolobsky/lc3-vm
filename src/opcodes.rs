@@ -1,3 +1,5 @@
+use crate::TrapCode;
+
 #[derive(Debug)]
 pub enum Argument {
     Reg(usize),
@@ -83,7 +85,7 @@ pub enum Opcode {
     },
     TRAP {
         // Execute Trap
-        trap_vec: u16,
+        trap_code: TrapCode,
     },
     RESERVED, // Unused. Throws an Illegal Opcode Exception.
 }
@@ -96,8 +98,8 @@ impl TryFrom<u16> for Opcode {
         match op {
             0b0001 => {
                 // ADD
-                let dr = instruction & 0b0000_111_000_0_00_000 >> 9;
-                let sr1 = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let dr = (instruction & 0b0000_111_000_0_00_000) >> 9;
+                let sr1 = (instruction & 0b0000_000_111_0_00_000) >> 6;
                 if instruction & (1 << 5) == 0 {
                     // Use sr2 register as 2nd argument
                     let sr2 = instruction & 0b0000_000_000_0_00_111;
@@ -108,7 +110,7 @@ impl TryFrom<u16> for Opcode {
                     })
                 } else {
                     // Use imm5 as 2nd argument
-                    let imm5 = instruction & 0b0000_000_000_0_11_111;
+                    let imm5 = sign_ext_imm5(instruction);
                     Ok(Opcode::ADD {
                         dr: dr.into(),
                         sr1: sr1.into(),
@@ -118,8 +120,8 @@ impl TryFrom<u16> for Opcode {
             }
             0b0101 => {
                 // AND , this is the same decode case as ADD
-                let dr = instruction & 0b0000_111_000_0_00_000 >> 9;
-                let sr1 = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let dr = (instruction & 0b0000_111_000_0_00_000u16) >> 9;
+                let sr1 = (instruction & 0b0000_000_111_0_00_000u16) >> 6;
                 if instruction & (1 << 5) == 0 {
                     // Use sr2 register as 2nd argument
                     let sr2 = instruction & 0b0000_000_000_0_00_111;
@@ -130,7 +132,7 @@ impl TryFrom<u16> for Opcode {
                     })
                 } else {
                     // Use imm5 as 2nd argument
-                    let imm5 = instruction & 0b0000_000_000_0_11_111;
+                    let imm5 = sign_ext_imm5(instruction);
                     Ok(Opcode::AND {
                         dr: dr.into(),
                         sr1: sr1.into(),
@@ -140,16 +142,17 @@ impl TryFrom<u16> for Opcode {
             }
             0b0000 => {
                 // BR  Conditional Branch
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::BR {
                     n: instruction & (1 << 11) != 0,
                     z: instruction & (1 << 10) != 0,
                     p: instruction & (1 << 9) != 0,
-                    offset: (instruction & 0b1_1111_1111) as i16,
+                    offset,
                 })
             }
             0b1100 => {
                 // JMP/RET
-                let base_r = instruction & 0b0000_000_111_0_00_000 >> 6;
+                let base_r = (instruction & 0b0000_000_111_0_00_000) >> 6;
                 if base_r == 0b111 {
                     Ok(Opcode::RET)
                 } else {
@@ -161,8 +164,9 @@ impl TryFrom<u16> for Opcode {
             0b0100 => {
                 // JSR/JSRR
                 if instruction & (1 << 11) != 0 {
+                    let offset = sign_ext_imm11(instruction);
                     Ok(Opcode::JSR {
-                        offset: (instruction & 0b111_11111) as i16,
+                        offset,
                     })
                 } else {
                     Ok(Opcode::JSRR {
@@ -172,31 +176,35 @@ impl TryFrom<u16> for Opcode {
             }
             0b0010 => {
                 // LD
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::LD {
                     dr: ((instruction & 0b111_0_00000000) >> 9) as usize,
-                    offset: (instruction & 0b1111_1111) as i16,
+                    offset,
                 })
             }
             0b1010 => {
                 // LDI , decode same as LD
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::LDI {
                     dr: ((instruction & 0b111_0_00000000) >> 9) as usize,
-                    offset: (instruction & 0b1111_1111) as i16,
+                    offset,
                 })
             }
             0b0110 => {
                 // LDR
+                let offset = sign_ext_imm6(instruction);
                 Ok(Opcode::LDR {
                     dr: ((instruction & 0b111_000_000000) >> 9) as usize,
                     base_r: ((instruction & 0b000_111_000000) >> 6) as usize,
-                    offset: (instruction & 0b000_000_111111) as i16,
+                    offset,
                 })
             }
             0b1110 => {
                 // LEA
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::LEA {
                     dr: ((instruction & 0b111_0000_0000) >> 8) as usize,
-                    offset: (instruction & 0b000_1111_1111) as i16,
+                    offset,
                 })
             }
             0b1001 => {
@@ -209,30 +217,41 @@ impl TryFrom<u16> for Opcode {
             0b1000 => Ok(Opcode::RTI),
             0b0011 => {
                 // ST
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::ST {
                     sr: ((instruction & 0b111_0000_0000) >> 8) as usize,
-                    offset: (instruction & 0b000_1111_1111) as i16,
+                    offset,
                 })
             }
             0b1011 => {
                 // STI
+                let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::STI {
                     sr: ((instruction & 0b111_0000_0000) >> 8) as usize,
-                    offset: (instruction & 0b000_1111_1111) as i16,
+                    offset,
                 })
             }
             0b0111 => {
                 // STR
+                let offset = sign_ext_imm6(instruction);
                 Ok(Opcode::STR {
                     sr: ((instruction & 0b111_000_000000) >> 9) as usize,
                     base_r: ((instruction & 0b000_111_000000) >> 6) as usize,
-                    offset: (instruction & 0b111111) as i16,
+                    offset,
                 })
             }
             0b1111 => {
-                Ok(Opcode::TRAP {
-                    trap_vec: instruction & 0b1111_1111, // This is 0-extended, not sign-extended
-                })
+                let trap_code_hex = instruction & 0b1111_1111;
+                let trap_code = match trap_code_hex {
+                    0x20 => TrapCode::Getc,
+                    0x21 => TrapCode::Out,
+                    0x22 => TrapCode::Puts,
+                    0x23 => TrapCode::In,
+                    0x24 => TrapCode::Putsp,
+                    0x25 => TrapCode::Halt,
+                    _ => panic!("Unknown trap code {trap_code_hex} !"),
+                };
+                Ok(Opcode::TRAP { trap_code })
             }
             0b1101 => Ok(Opcode::RESERVED),
             _ => {
@@ -241,4 +260,44 @@ impl TryFrom<u16> for Opcode {
             }
         }
     }
+}
+
+fn sign_ext_imm6(instruction: u16) -> i16 {
+    let offset = (instruction & 0b11_1111) as i16; // Extract 6 bits
+    let offset = if offset & 0b10_0000 != 0 {
+        offset | !0b11_1111 // Sign-extend by setting the higher bits to 1
+    } else {
+        offset & 0b11_1111 // Keep the higher bits as 0
+    };
+    offset
+}
+
+fn sign_ext_imm9(instruction: u16) -> i16 {
+    let offset = (instruction & 0b1_1111_1111) as i16; // Extract 9 bits
+    let offset = if offset & 0b1_0000_0000 != 0 {
+        offset | !0b1_1111_1111 // Sign-extend by setting the higher bits to 1
+    } else {
+        offset & 0b1_1111_1111 // Keep the higher bits as 0
+    };
+    offset
+}
+
+fn sign_ext_imm5(instruction: u16) -> i16 {
+    let imm5 = (instruction & 0b0000_000_000_0_11_111) as i16; // Extract 5 bits and cast to i16
+    let imm5 = if imm5 & 0b1_0000 != 0 {
+        imm5 | !0b0001_1111 // Set the higher bits to 1 for negative values
+    } else {
+        imm5 & 0b0001_1111 // Keep the higher bits as 0 for positive values
+    };
+    imm5
+}
+
+fn sign_ext_imm11(instruction: u16) -> i16 {
+    let offset = (instruction & 0b111_1111_1111) as i16; // Extract 11 bits
+    let offset = if offset & 0b100_0000_0000 != 0 {
+        offset | !0b111_1111_1111 // Sign-extend by setting the higher bits to 1
+    } else {
+        offset & 0b111_1111_1111 // Keep the higher bits as 0
+    };
+    offset
 }

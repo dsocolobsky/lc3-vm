@@ -1,5 +1,4 @@
 use crate::opcodes::{Argument, Opcode};
-use crate::terminal;
 use crate::util::{base_r_with_offset, join_u8};
 use std::fmt::{Debug, Formatter};
 use std::io;
@@ -304,7 +303,7 @@ impl VM {
 
     fn handle_keyboard(&mut self) {
         let mut buffer = [0; 1];
-        std::io::stdin().read_exact(&mut buffer).unwrap();
+        io::stdin().read_exact(&mut buffer).unwrap();
         if buffer[0] != 0 {
             self.memory[MR_KBSR] = 1 << 15;
             self.memory[MR_KBDR] = buffer[0] as u16;
@@ -325,10 +324,11 @@ impl VM {
     }
 
     fn handle_trap_code(&mut self, trap_code: TrapCode) {
-        terminal::turn_off_canonical_and_echo_modes();
         match trap_code {
             TrapCode::Getc => {
-                self.registers[0] = terminal::get_char() as u16;
+                let mut buffer = [0; 1];
+                std::io::stdin().read_exact(&mut buffer).unwrap();
+                self.registers[0] = buffer[0] as u16;
                 self.set_flags(self.registers[0] as i16);
             }
             TrapCode::Out => {
@@ -347,7 +347,14 @@ impl VM {
             }
             TrapCode::In => {
                 println!("Enter a character: ");
-                self.registers[0] = terminal::get_char() as u16;
+                io::stdout().flush().expect("failed to flush");
+                let char = io::stdin()
+                    .bytes()
+                    .next()
+                    .and_then(|result| result.ok())
+                    .map(|byte| byte as u16)
+                    .unwrap();
+                self.registers[0] = char;
                 self.set_flags(self.registers[0] as i16);
             }
             TrapCode::Putsp => {
@@ -366,7 +373,6 @@ impl VM {
                 self.running = false;
             }
         }
-        terminal::restore_terminal_settings();
     }
 }
 

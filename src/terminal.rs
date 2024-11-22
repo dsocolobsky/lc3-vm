@@ -23,4 +23,8 @@ impl Terminal<'_> {
     pub(crate) fn out(&mut self, c: u8) {
         self.stdout.write(&[c]).unwrap();
     }
+
+    pub(crate) fn flush(&mut self) {
+        self.stdout.flush().unwrap()
+    }
 }

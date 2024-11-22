@@ -10,7 +10,6 @@
     }
 }*/
 
-
 mod opcodes;
 mod terminal;
 
@@ -76,7 +75,7 @@ impl VM<'_> {
         self.terminal.clear();
 
         let mut cycle_count = 0; // For debug purposes
-        let cycle_limit = 50;
+        let cycle_limit = 15000000;
         while self.running && cycle_count < cycle_limit {
             // Fetch
             let instruction = self.fetch();
@@ -128,7 +127,7 @@ impl VM<'_> {
 
     fn read_data_into_memory(&mut self, data: &[u8]) {
         let origin = join_u8(data[0], data[1]) as usize;
-        println!("Loading data at origin {:#x}", origin);
+        eprintln!("Loading data at origin {:#x}", origin);
         let mut mem_i: usize = origin;
         let mut data_i: usize = 2; // Skip the origin
         while mem_i < MEMORY_SIZE - 1 && data_i < data.len() {
@@ -147,7 +146,7 @@ impl VM<'_> {
                 sr2: Argument::Reg(sr2),
             } => {
                 let res = self.registers[sr1] + self.registers[sr2];
-                println!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
+                eprintln!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
                 self.registers[dr] = self.registers[sr1] + self.registers[sr2];
                 self.set_flags(res as i16);
             }
@@ -157,7 +156,7 @@ impl VM<'_> {
                 sr2: Argument::Immediate(val),
             } => {
                 let res = (self.registers[sr1] as i16).wrapping_add(val) as u16;
-                println!("ADD reg[{dr}] <- reg[{sr1}] + {val} = {res}");
+                eprintln!("ADD reg[{dr}] <- reg[{sr1}] + {val} = {res}");
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
@@ -167,7 +166,7 @@ impl VM<'_> {
                 sr2: Argument::Reg(sr2),
             } => {
                 let res = self.registers[sr1] & self.registers[sr2];
-                println!(
+                eprintln!(
                     "AND reg[{}] <- reg[{}] & reg[{}] = {:#0x}",
                     dr, sr1, sr2, res
                 );
@@ -180,7 +179,7 @@ impl VM<'_> {
                 sr2: Argument::Immediate(val),
             } => {
                 let res = ((self.registers[sr1] as i16) & val) as u16;
-                println!(
+                eprintln!(
                     "AND reg[{}] <- reg[{}] & {:#0x} = {:#0x}",
                     dr, sr1, val, res
                 );
@@ -193,40 +192,40 @@ impl VM<'_> {
                     ((true, _, _), ConditionFlag::Neg) |
                     ((_, true, _), ConditionFlag::Zero) |
                     ((_, _, true), ConditionFlag::Pos) => {
-                        println!("BR: Taken, n={n}, z={z}, p={p} | offset = {offset}");
+                        eprintln!("BR: Taken, n={n}, z={z}, p={p} | offset = {offset}");
                         self.set_pc(self.pc_with_offset(offset));
                     },
-                    _ => println!("BR: Not Taken, n={n}, z={z}, p={p} | offset = {offset}"),
+                    _ => eprintln!("BR: Not Taken, n={n}, z={z}, p={p} | offset = {offset}"),
                 }
             }
             Opcode::JMP { base_r } => {
-                println!("JMP {:#0x}", base_r);
+                eprintln!("JMP {:#0x}", base_r);
                 self.set_pc(self.registers[base_r] as usize);
             }
             Opcode::RET => {
                 let dir = self.registers[REG_RET] as usize;
-                println!("RET {:#0x}", dir);
+                eprintln!("RET {:#0x}", dir);
                 self.set_pc(dir);
             }
             Opcode::JSR { offset } => {
                 let dir = self.pc_with_offset(offset);
-                println!("JSR {:#0x}+{} = {:#0x}", self.pc(), offset, dir);
+                eprintln!("JSR {:#0x}+{} = {:#0x}", self.pc(), offset, dir);
                 self.set_pc(dir);
             }
             Opcode::JSRR { base_r } => {
-                println!("JSRR {:#0x}", self.registers[base_r]);
+                eprintln!("JSRR {:#0x}", self.registers[base_r]);
                 self.set_pc(self.registers[base_r] as usize);
             }
             Opcode::LD { dr, offset } => {
                 let res = self.read_with_offset(offset);
-                println!("LD reg[{dr}] <- {res}");
+                eprintln!("LD reg[{dr}] <- {res}");
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
             Opcode::LDI { dr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
                 let res = self.read(dir);
-                println!(
+                eprintln!(
                     "LDI reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
                     dr,
                     self.pc(),
@@ -240,7 +239,7 @@ impl VM<'_> {
             Opcode::LDR { dr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
                 let res = self.read(dir);
-                println!(
+                eprintln!(
                     "LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
                     dr, base_r, offset, dir, res
                 );
@@ -249,24 +248,24 @@ impl VM<'_> {
             }
             Opcode::LEA { dr, offset } => {
                 let dir = self.pc_with_offset(offset) as u16;
-                println!("LEA reg[{}] <- {:#0x}", dr, dir);
+                eprintln!("LEA reg[{}] <- {:#0x}", dr, dir);
                 self.registers[dr] = dir;
                 self.set_flags(dir as i16);
             }
             Opcode::NOT { dr, sr } => {
                 let res = !self.registers[sr];
-                println!("NOT reg[{}] <- !reg[{}] = {:#0x}", dr, sr, res);
+                eprintln!("NOT reg[{}] <- !reg[{}] = {:#0x}", dr, sr, res);
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
             }
             Opcode::RTI => {
-                println!("RTI");
+                eprintln!("RTI");
                 dbg!(&opcode);
             }
             Opcode::ST { sr, offset } => {
                 let dir = self.pc_with_offset(offset);
                 let val = self.registers[sr];
-                println!(
+                eprintln!(
                     "ST mem[{:#0x}+{:#0x} = {:#0x}] <- reg[{}] = {:#0x}",
                     self.pc(),
                     offset,
@@ -279,17 +278,17 @@ impl VM<'_> {
             Opcode::STI { sr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
                 let val = self.registers[sr];
-                println!("STI mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
+                eprintln!("STI mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
                 self.memory[dir] = self.registers[sr];
             }
             Opcode::STR { sr, base_r, offset } => {
                 let dir = base_r_with_offset(base_r, offset);
                 let val = self.registers[sr];
-                println!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
+                eprintln!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
                 self.memory[dir] = val;
             }
             Opcode::TRAP { trap_code } => {
-                println!("TRAP {:?}", trap_code);
+                eprintln!("TRAP {:?}", trap_code);
                 self.registers[REG_RET] = self.pc() as u16;
                 self.handle_trap_code(trap_code);
             }
@@ -325,11 +324,11 @@ impl VM<'_> {
             dbg!(&b);
             use termion::event::Key::*;
             if let Char(ch) = b {
-                println!("MR_KBSR Read {ch}");
+                eprintln!("MR_KBSR Read {ch}");
                 self.memory[MR_KBSR] = 1 << 15;
                 self.memory[MR_KBDR] = u16::try_from(ch).unwrap();
             } else {
-                println!("MR_KBSR");
+                eprintln!("MR_KBSR");
                 self.memory[MR_KBSR] = 0;
             }
         }
@@ -367,6 +366,7 @@ impl VM<'_> {
             TrapCode::Out => {
                 let ch = self.registers[0] as u8;
                 self.terminal.out(ch);
+                self.terminal.flush();
             }
             TrapCode::Puts => {
                 let mut i = self.registers[0] as usize;
@@ -375,6 +375,7 @@ impl VM<'_> {
                     self.terminal.out(c);
                     i += 1;
                 }
+                self.terminal.flush();
             }
             TrapCode::In => {
                 // TODO this is pretty much TRAP_GETC
@@ -428,7 +429,7 @@ fn join_u8(hi: u8, lo: u8) -> u16 {
 }
 
 fn main() {
-    let data: Vec<u8> = fs::read("rogue.obj").expect("Failed to load file");
+    let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
 }

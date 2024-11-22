@@ -1,4 +1,5 @@
-use crate::TrapCode;
+use crate::util::{sign_ext_imm11, sign_ext_imm5, sign_ext_imm6, sign_ext_imm9};
+use crate::vm::TrapCode;
 
 #[derive(Debug)]
 pub enum Argument {
@@ -114,7 +115,7 @@ impl TryFrom<u16> for Opcode {
                     Ok(Opcode::ADD {
                         dr: dr.into(),
                         sr1: sr1.into(),
-                        sr2: Argument::Immediate(imm5 as i16),
+                        sr2: Argument::Immediate(imm5),
                     })
                 }
             }
@@ -136,7 +137,7 @@ impl TryFrom<u16> for Opcode {
                     Ok(Opcode::AND {
                         dr: dr.into(),
                         sr1: sr1.into(),
-                        sr2: Argument::Immediate(imm5 as i16),
+                        sr2: Argument::Immediate(imm5),
                     })
                 }
             }
@@ -165,9 +166,7 @@ impl TryFrom<u16> for Opcode {
                 // JSR/JSRR
                 if instruction & (1 << 11) != 0 {
                     let offset = sign_ext_imm11(instruction);
-                    Ok(Opcode::JSR {
-                        offset,
-                    })
+                    Ok(Opcode::JSR { offset })
                 } else {
                     Ok(Opcode::JSRR {
                         base_r: ((instruction & 0b111_000000) >> 6) as usize,
@@ -260,44 +259,4 @@ impl TryFrom<u16> for Opcode {
             }
         }
     }
-}
-
-fn sign_ext_imm6(instruction: u16) -> i16 {
-    let offset = (instruction & 0b11_1111) as i16; // Extract 6 bits
-    let offset = if offset & 0b10_0000 != 0 {
-        offset | !0b11_1111 // Sign-extend by setting the higher bits to 1
-    } else {
-        offset & 0b11_1111 // Keep the higher bits as 0
-    };
-    offset
-}
-
-fn sign_ext_imm9(instruction: u16) -> i16 {
-    let offset = (instruction & 0b1_1111_1111) as i16; // Extract 9 bits
-    let offset = if offset & 0b1_0000_0000 != 0 {
-        offset | !0b1_1111_1111 // Sign-extend by setting the higher bits to 1
-    } else {
-        offset & 0b1_1111_1111 // Keep the higher bits as 0
-    };
-    offset
-}
-
-fn sign_ext_imm5(instruction: u16) -> i16 {
-    let imm5 = (instruction & 0b0000_000_000_0_11_111) as i16; // Extract 5 bits and cast to i16
-    let imm5 = if imm5 & 0b1_0000 != 0 {
-        imm5 | !0b0001_1111 // Set the higher bits to 1 for negative values
-    } else {
-        imm5 & 0b0001_1111 // Keep the higher bits as 0 for positive values
-    };
-    imm5
-}
-
-fn sign_ext_imm11(instruction: u16) -> i16 {
-    let offset = (instruction & 0b111_1111_1111) as i16; // Extract 11 bits
-    let offset = if offset & 0b100_0000_0000 != 0 {
-        offset | !0b111_1111_1111 // Sign-extend by setting the higher bits to 1
-    } else {
-        offset & 0b111_1111_1111 // Keep the higher bits as 0
-    };
-    offset
 }

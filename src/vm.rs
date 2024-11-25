@@ -1,5 +1,5 @@
 use crate::opcodes::{Argument, Opcode};
-use crate::util::{base_r_with_offset, join_u8};
+use crate::util::join_u8;
 use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Read, Write};
@@ -54,7 +54,7 @@ impl VM {
         self.running = true;
 
         let mut cycle_count = 0; // For debug purposes
-        let cycle_limit = 15000000;
+        let cycle_limit = 500000;
         while self.running && cycle_count < cycle_limit {
             // Fetch
             let instruction = self.fetch();
@@ -283,15 +283,21 @@ impl VM {
     }
 
     fn set_pc(&mut self, new_pc: usize) {
+        let new_pc = u16::try_from(new_pc).expect("PC should fit in 16 bits");
         self.registers[REG_IDX_PC] = new_pc as u16;
     }
 
     fn advance_pc(&mut self) {
-        self.registers[REG_IDX_PC] += 1;
+        self.set_pc(self.pc_with_offset(1));
     }
 
     fn pc_with_offset(&self, offset: i16) -> usize {
-        u16::wrapping_add(self.pc() as u16, offset as u16) as usize
+        let pc = self.pc() as u16;
+        if offset >= 0 {
+            pc.wrapping_add(offset as u16) as usize
+        } else {
+            pc.wrapping_sub((-offset) as u16) as usize
+        }
     }
 
     fn read(&mut self, position: usize) -> u16 {
@@ -331,13 +337,14 @@ impl VM {
         match trap_code {
             TrapCode::Getc => {
                 let mut buffer = [0; 1];
-                std::io::stdin().read_exact(&mut buffer).unwrap();
+                io::stdin().read_exact(&mut buffer).unwrap();
                 self.registers[0] = buffer[0] as u16;
                 self.set_flags(self.registers[0] as i16);
             }
             TrapCode::Out => {
                 let ch = self.registers[0] as u8;
                 print!("{}", ch as char);
+                eprint!("{}", ch as char);
                 io::stdout().flush().expect("Failed to flush");
             }
             TrapCode::Puts => {
@@ -345,6 +352,7 @@ impl VM {
                 while self.memory[i] != 0x0000 {
                     let ch = self.memory[i] as u8;
                     print!("{}", ch as char);
+                    eprint!("{}", ch as char);
                     i += 1;
                 }
                 io::stdout().flush().expect("Failed to flush");
@@ -367,8 +375,10 @@ impl VM {
                     let ch = self.memory[i];
                     let (ch1, ch2) = (ch & 0xFF, ch >> 8);
                     print!("{}", (ch1 as u8) as char);
+                    eprint!("{}", (ch1 as u8) as char);
                     if ch2 != 0x00 {
                         print!("{}", (ch2 as u8) as char);
+                        eprint!("{}", (ch2 as u8) as char);
                     }
                     i += 1;
                 }
@@ -423,5 +433,286 @@ mod tests {
         }
         assert_eq!(vm.memory[0x3000], 0xcafe);
         assert_eq!(vm.memory[0x3001], 0xbabe);
+    }
+
+    #[test]
+    fn add_register_simple() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 10;
+        vm.registers[1] = 3;
+        vm.registers[2] = 5;
+
+        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Reg(2)});
+        assert_eq!(vm.registers[0], 8);
+        assert_eq!(vm.registers[1], 3);
+        assert_eq!(vm.registers[2], 5);
+    }
+
+    #[test]
+    fn add_register_negative() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 0;
+        vm.registers[1] = 0;
+        vm.registers[2] = 0;
+
+        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Immediate(-5)});
+        assert_eq!(vm.registers[0], 0b1111_1111_1111_1011);
+        assert_eq!(vm.registers[1], 0);
+        assert_eq!(vm.registers[2], 0);
+    }
+
+    #[test]
+    fn add_reg_overflow() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 3;
+        vm.registers[1] = u16::MAX;
+        vm.registers[2] = 2;
+
+        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Reg(2)});
+        assert_eq!(vm.registers[0], 1);
+        assert_eq!(vm.registers[1], u16::MAX);
+        assert_eq!(vm.registers[2], 2);
+    }
+
+    #[test]
+    fn add_imm5_overflow() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 3;
+        vm.registers[1] = u16::MAX;
+        vm.registers[2] = 1;
+
+        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Immediate(2)});
+        assert_eq!(vm.registers[0], 1);
+        assert_eq!(vm.registers[1], u16::MAX);
+        assert_eq!(vm.registers[2], 1);
+    }
+
+    #[test]
+    fn execute_and_regs() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 3;
+        vm.registers[1] = 4;
+        vm.registers[2] = 7;
+
+        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Reg(1)});
+        assert_eq!(vm.registers[0], 4 & 7);
+        assert_eq!(vm.registers[1], 4);
+        assert_eq!(vm.registers[2], 7);
+    }
+
+    #[test]
+    fn execute_and_imm() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 3;
+        vm.registers[1] = 4;
+        vm.registers[2] = 7;
+
+        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Immediate(9)});
+        assert_eq!(vm.registers[0], 4 & 9);
+        assert_eq!(vm.registers[1], 4);
+        assert_eq!(vm.registers[2], 7);
+    }
+
+    #[test]
+    fn execute_and_zero() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[0] = 3;
+        vm.registers[1] = 4;
+        vm.registers[2] = 7;
+
+        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Immediate(0)});
+        assert_eq!(vm.registers[0], 0);
+        assert_eq!(vm.registers[1], 4);
+        assert_eq!(vm.registers[2], 7);
+    }
+
+    #[test]
+    fn execute_br_not_taken() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        assert_eq!(vm.pc(), 0x3000);
+        vm.set_cond_flag(ConditionFlag::Neg);
+        vm.execute(Opcode::BR {
+            n: false,
+            z: false,
+            p: true,
+            offset: 15,
+        });
+        assert_eq!(vm.pc(), 0x3000);
+    }
+
+    #[test]
+    fn execute_br_taken_pos() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        assert_eq!(vm.pc(), 0x3000);
+        vm.set_cond_flag(ConditionFlag::Pos);
+        vm.execute(Opcode::BR {
+            n: false,
+            z: false,
+            p: true,
+            offset: 15,
+        });
+        assert_eq!(vm.pc(), 0x3000 + 15);
+    }
+
+    #[test]
+    fn execute_br_taken_neg() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        assert_eq!(vm.pc(), 0x3000);
+        vm.set_cond_flag(ConditionFlag::Pos);
+        vm.execute(Opcode::BR {
+            n: false,
+            z: false,
+            p: true,
+            offset: -15,
+        });
+        assert_eq!(vm.pc(), 0x3000 - 15);
+    }
+
+    #[test]
+    fn execute_br_taken_overflow() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(u16::MAX as usize);
+        assert_eq!(vm.pc(), u16::MAX as usize);
+        vm.set_cond_flag(ConditionFlag::Pos);
+        vm.execute(Opcode::BR {
+            n: false,
+            z: false,
+            p: true,
+            offset: 2,
+        });
+        assert_eq!(vm.pc(), 1);
+    }
+
+    #[test]
+    fn execute_br_taken_underflow() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0);
+        assert_eq!(vm.pc(), 0);
+        vm.set_cond_flag(ConditionFlag::Pos);
+        vm.execute(Opcode::BR {
+            n: false,
+            z: false,
+            p: true,
+            offset: -1,
+        });
+        assert_eq!(vm.pc(), u16::MAX as usize);
+    }
+
+    #[test]
+    fn execute_jmp() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[1] = 0x3999;
+        vm.execute(Opcode::JMP {
+            base_r: 1,
+        });
+        assert_eq!(vm.pc(), 0x3999);
+    }
+
+    #[test]
+    fn execute_ret() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.registers[7] = 0x3999;
+        vm.execute(Opcode::RET);
+        assert_eq!(vm.pc(), 0x3999);
+    }
+
+    #[test]
+    fn execute_jsr_pos() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0x3005);
+        vm.execute(Opcode::JSR { offset: 15 });
+        assert_eq!(vm.pc(), 0x3005 + 15);
+        assert_eq!(vm.registers[REG_RET], 0x3005);
+    }
+
+    #[test]
+    fn execute_jsr_neg() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0x3005);
+        vm.execute(Opcode::JSR { offset: -15 });
+        assert_eq!(vm.pc(), 0x3005 - 15);
+        assert_eq!(vm.registers[REG_RET], 0x3005);
+    }
+
+    #[test]
+    fn execute_jsrr() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0x3005);
+        vm.registers[2] = 0x4000;
+        vm.execute(Opcode::JSRR { base_r: 2 });
+        assert_eq!(vm.pc(), 0x4000);
+        assert_eq!(vm.registers[REG_RET], 0x3005);
+    }
+
+    #[test]
+    fn execute_ld_pos() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0x10, 0x10, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.execute(Opcode::LD { dr: 0, offset: 2 });
+        assert_eq!(vm.registers[0], 0xbabe);
+    }
+
+    #[test]
+    fn execute_ld_neg() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0x10, 0x10, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0x3000 + 2);
+        vm.execute(Opcode::LD { dr: 0, offset: -1 });
+        assert_eq!(vm.registers[0], 0xcafe);
+    }
+
+    #[test]
+    fn execute_ldi_pos() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0x30, 0x02, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.execute(Opcode::LDI { dr: 0, offset: 0 });
+        assert_eq!(vm.registers[0], 0xbabe);
+    }
+
+    #[test]
+    fn execute_ldi_neg() {
+        let data: Vec<u8> = vec![0x30, 0x00, 0x30, 0x02, 0xca, 0xfe, 0xba, 0xbe];
+        let mut vm = VM::new(&data);
+
+        vm.set_pc(0x3000 + 1);
+        vm.execute(Opcode::LDI { dr: 0, offset: -1 });
+        assert_eq!(vm.registers[0], 0xbabe);
     }
 }

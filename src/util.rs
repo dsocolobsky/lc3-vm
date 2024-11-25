@@ -1,7 +1,3 @@
-pub(crate) fn base_r_with_offset(base_r: usize, offset: i16) -> usize {
-    (base_r as i16).wrapping_add(offset) as usize
-}
-
 pub(crate) fn join_u8(hi: u8, lo: u8) -> u16 {
     let hi = hi as u16;
     let lo = lo as u16;

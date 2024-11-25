@@ -212,7 +212,8 @@ impl VM {
                 self.set_flags(res as i16);
             }
             Opcode::LDR { dr, base_r, offset } => {
-                let dir = base_r_with_offset(base_r, offset);
+                let base_r_dir = self.registers[base_r];
+                let dir = (base_r_dir as i16).wrapping_add(offset) as usize;
                 let res = self.read(dir);
                 eprintln!(
                     "LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
@@ -257,7 +258,8 @@ impl VM {
                 self.memory[dir] = self.registers[sr];
             }
             Opcode::STR { sr, base_r, offset } => {
-                let dir = base_r_with_offset(base_r, offset);
+                let base_r_dir = self.registers[base_r];
+                let dir = (base_r_dir as i16).wrapping_add(offset) as usize;
                 let val = self.registers[sr];
                 eprintln!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
                 self.memory[dir] = val;

@@ -271,7 +271,14 @@ mod tests {
         // DR=010=2 , SR1=011=3  SR2=001=1
         let ins = 0b0001_010_011_0_00_001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::ADD {dr: 2, sr1: 3, sr2: Argument::Reg(1)});
+        assert_eq!(
+            op,
+            Opcode::ADD {
+                dr: 2,
+                sr1: 3,
+                sr2: Argument::Reg(1)
+            }
+        );
     }
 
     #[test]
@@ -279,7 +286,14 @@ mod tests {
         // DR=000=0 , SR1=100=4  imm5=01001=9
         let ins = 0b0001_000_100_1_01001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::ADD {dr: 0, sr1: 4, sr2: Argument::Immediate(9)});
+        assert_eq!(
+            op,
+            Opcode::ADD {
+                dr: 0,
+                sr1: 4,
+                sr2: Argument::Immediate(9)
+            }
+        );
     }
 
     #[test]
@@ -287,7 +301,14 @@ mod tests {
         // DR=000=0 , SR1=100=4  imm5=11011=-5
         let ins = 0b0001_000_100_1_11011;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::ADD {dr: 0, sr1: 4, sr2: Argument::Immediate(-5)});
+        assert_eq!(
+            op,
+            Opcode::ADD {
+                dr: 0,
+                sr1: 4,
+                sr2: Argument::Immediate(-5)
+            }
+        );
     }
 
     #[test]
@@ -295,7 +316,14 @@ mod tests {
         // DR=010=2 , SR1=011=3  SR2=001=1
         let ins = 0b0101_010_011_0_00_001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::AND {dr: 2, sr1: 3, sr2: Argument::Reg(1)});
+        assert_eq!(
+            op,
+            Opcode::AND {
+                dr: 2,
+                sr1: 3,
+                sr2: Argument::Reg(1)
+            }
+        );
     }
 
     #[test]
@@ -303,7 +331,14 @@ mod tests {
         // DR=000=0 , SR1=100=4  imm5=01001=9
         let ins = 0b0101_000_100_1_01001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::AND {dr: 0, sr1: 4, sr2: Argument::Immediate(9)});
+        assert_eq!(
+            op,
+            Opcode::AND {
+                dr: 0,
+                sr1: 4,
+                sr2: Argument::Immediate(9)
+            }
+        );
     }
 
     #[test]
@@ -311,28 +346,59 @@ mod tests {
         // DR=000=0 , SR1=100=4  imm5=10111=-9
         let ins = 0b0101_000_100_1_10111;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::AND {dr: 0, sr1: 4, sr2: Argument::Immediate(-9)});
+        assert_eq!(
+            op,
+            Opcode::AND {
+                dr: 0,
+                sr1: 4,
+                sr2: Argument::Immediate(-9)
+            }
+        );
     }
 
     #[test]
     fn decode_br_pos() {
         let ins = 0b0000_101_000011000;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::BR {n: true, z: false, p: true, offset: 24});
+        assert_eq!(
+            op,
+            Opcode::BR {
+                n: true,
+                z: false,
+                p: true,
+                offset: 24
+            }
+        );
     }
 
     #[test]
     fn decode_br_neg() {
-        let ins = 0b0000_010_111100000 ;
+        let ins = 0b0000_010_111100000;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::BR {n: false, z: true, p: false, offset: -32});
+        assert_eq!(
+            op,
+            Opcode::BR {
+                n: false,
+                z: true,
+                p: false,
+                offset: -32
+            }
+        );
     }
 
     #[test]
     fn decode_br_all_zeroes() {
-        let ins = 0b0000_000_000000000 ;
+        let ins = 0b0000_000_000000000;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::BR {n: false, z: false, p: false, offset: 0});
+        assert_eq!(
+            op,
+            Opcode::BR {
+                n: false,
+                z: false,
+                p: false,
+                offset: 0
+            }
+        );
     }
 
     #[test]
@@ -358,7 +424,7 @@ mod tests {
 
     #[test]
     fn decode_jsr_neg() {
-        let ins = 0b0100_1_11110010011 ;
+        let ins = 0b0100_1_11110010011;
         let op = Opcode::try_from(ins).unwrap();
         assert_eq!(op, Opcode::JSR { offset: -109 });
     }
@@ -381,7 +447,13 @@ mod tests {
     fn decode_ld_neg() {
         let ins = 0b0010_101_100000001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::LD { dr: 5, offset: -255 });
+        assert_eq!(
+            op,
+            Opcode::LD {
+                dr: 5,
+                offset: -255
+            }
+        );
     }
 
     #[test]
@@ -395,21 +467,41 @@ mod tests {
     fn decode_ldi_neg() {
         let ins = 0b1010_101_100000001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::LDI { dr: 5, offset: -255 });
+        assert_eq!(
+            op,
+            Opcode::LDI {
+                dr: 5,
+                offset: -255
+            }
+        );
     }
 
     #[test]
     fn decode_ldr_pos() {
         let ins = 0b0110_101_001_000111;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::LDR { dr: 5, base_r: 1, offset: 7 });
+        assert_eq!(
+            op,
+            Opcode::LDR {
+                dr: 5,
+                base_r: 1,
+                offset: 7
+            }
+        );
     }
 
     #[test]
     fn decode_ldr_neg() {
         let ins = 0b0110_101_010_100010;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::LDR { dr: 5, base_r: 2, offset: -30 });
+        assert_eq!(
+            op,
+            Opcode::LDR {
+                dr: 5,
+                base_r: 2,
+                offset: -30
+            }
+        );
     }
 
     #[test]
@@ -423,7 +515,13 @@ mod tests {
     fn decode_lea_neg() {
         let ins = 0b1110_101_100000001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::LEA { dr: 5, offset: -255 });
+        assert_eq!(
+            op,
+            Opcode::LEA {
+                dr: 5,
+                offset: -255
+            }
+        );
     }
 
     #[test]
@@ -451,7 +549,13 @@ mod tests {
     fn decode_st_neg() {
         let ins = 0b0011_101_100000001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::ST { sr: 5, offset: -255 });
+        assert_eq!(
+            op,
+            Opcode::ST {
+                sr: 5,
+                offset: -255
+            }
+        );
     }
 
     #[test]
@@ -465,48 +569,98 @@ mod tests {
     fn decode_sti_neg() {
         let ins = 0b1011_101_100000001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::STI { sr: 5, offset: -255 });
+        assert_eq!(
+            op,
+            Opcode::STI {
+                sr: 5,
+                offset: -255
+            }
+        );
     }
 
     #[test]
     fn decode_str_pos() {
         let ins = 0b0111_101_010_010100;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::STR { sr: 5, base_r: 2, offset: 20 });
+        assert_eq!(
+            op,
+            Opcode::STR {
+                sr: 5,
+                base_r: 2,
+                offset: 20
+            }
+        );
     }
 
     #[test]
     fn decode_str_neg() {
         let ins = 0b0111_101_010_100010;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::STR { sr: 5, base_r: 2, offset: -30 });
+        assert_eq!(
+            op,
+            Opcode::STR {
+                sr: 5,
+                base_r: 2,
+                offset: -30
+            }
+        );
     }
 
     #[test]
     fn decode_trap() {
         let ins = 0b1111_0000_0010_0000;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::Getc });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::Getc
+            }
+        );
 
         let ins = 0b1111_0000_0010_0001;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::Out });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::Out
+            }
+        );
 
         let ins = 0b1111_0000_0010_0010;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::Puts });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::Puts
+            }
+        );
 
         let ins = 0b1111_0000_0010_0011;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::In });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::In
+            }
+        );
 
         let ins = 0b1111_0000_0010_0100;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::Putsp });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::Putsp
+            }
+        );
 
         let ins = 0b1111_0000_0010_0101;
         let op = Opcode::try_from(ins).unwrap();
-        assert_eq!(op, Opcode::TRAP { trap_code: TrapCode::Halt });
+        assert_eq!(
+            op,
+            Opcode::TRAP {
+                trap_code: TrapCode::Halt
+            }
+        );
     }
 
     #[test]

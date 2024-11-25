@@ -1,5 +1,6 @@
 use crate::opcodes::{Argument, Opcode};
 use crate::util::join_u8;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Read, Write};
@@ -53,7 +54,6 @@ impl VM {
     pub(crate) fn run(&mut self) {
         self.running = true;
 
-        let mut cycle_count = 0; // For debug purposes
         while self.running {
             // Fetch
             let instruction = self.fetch();
@@ -69,7 +69,6 @@ impl VM {
             // Execute
             self.execute(opcode);
             dbg!(&self);
-            cycle_count += 1;
         }
     }
 
@@ -119,7 +118,7 @@ impl VM {
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                let res = u16::wrapping_add(self.registers[sr1],self.registers[sr2]);
+                let res = u16::wrapping_add(self.registers[sr1], self.registers[sr2]);
                 eprintln!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
                 self.registers[dr] = res;
                 self.set_flags(res as i16);
@@ -283,7 +282,7 @@ impl VM {
 
     fn set_pc(&mut self, new_pc: usize) {
         let new_pc = u16::try_from(new_pc).expect("PC should fit in 16 bits");
-        self.registers[REG_IDX_PC] = new_pc as u16;
+        self.registers[REG_IDX_PC] = new_pc;
     }
 
     fn advance_pc(&mut self) {
@@ -318,12 +317,10 @@ impl VM {
     }
 
     fn set_flags(&mut self, res: i16) {
-        let cond = if res == 0 {
-            ConditionFlag::Zero
-        } else if res > 0 {
-            ConditionFlag::Pos
-        } else {
-            ConditionFlag::Neg
+        let cond = match res.cmp(&0i16) {
+            Ordering::Less => ConditionFlag::Neg,
+            Ordering::Equal => ConditionFlag::Zero,
+            Ordering::Greater => ConditionFlag::Pos,
         };
         self.set_cond_flag(cond);
     }
@@ -387,9 +384,9 @@ impl VM {
 
 impl Debug for VM {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
+        writeln!(
             f,
-            "[r0={},r1={},r2={},r3={},r4={},r5={},r6={},r7={},PC={:#X},COND={:#X}]\n",
+            "[r0={},r1={},r2={},r3={},r4={},r5={},r6={},r7={},PC={:#X},COND={:#X}]",
             self.registers[0],
             self.registers[1],
             self.registers[2],
@@ -439,7 +436,11 @@ mod tests {
         vm.registers[1] = 3;
         vm.registers[2] = 5;
 
-        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Reg(2)});
+        vm.execute(Opcode::ADD {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Reg(2),
+        });
         assert_eq!(vm.registers[0], 8);
         assert_eq!(vm.registers[1], 3);
         assert_eq!(vm.registers[2], 5);
@@ -454,7 +455,11 @@ mod tests {
         vm.registers[1] = 0;
         vm.registers[2] = 0;
 
-        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Immediate(-5)});
+        vm.execute(Opcode::ADD {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Immediate(-5),
+        });
         assert_eq!(vm.registers[0], 0b1111_1111_1111_1011);
         assert_eq!(vm.registers[1], 0);
         assert_eq!(vm.registers[2], 0);
@@ -469,7 +474,11 @@ mod tests {
         vm.registers[1] = u16::MAX;
         vm.registers[2] = 2;
 
-        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Reg(2)});
+        vm.execute(Opcode::ADD {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Reg(2),
+        });
         assert_eq!(vm.registers[0], 1);
         assert_eq!(vm.registers[1], u16::MAX);
         assert_eq!(vm.registers[2], 2);
@@ -484,7 +493,11 @@ mod tests {
         vm.registers[1] = u16::MAX;
         vm.registers[2] = 1;
 
-        vm.execute(Opcode::ADD {dr: 0, sr1: 1, sr2: Argument::Immediate(2)});
+        vm.execute(Opcode::ADD {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Immediate(2),
+        });
         assert_eq!(vm.registers[0], 1);
         assert_eq!(vm.registers[1], u16::MAX);
         assert_eq!(vm.registers[2], 1);
@@ -499,7 +512,11 @@ mod tests {
         vm.registers[1] = 4;
         vm.registers[2] = 7;
 
-        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Reg(1)});
+        vm.execute(Opcode::AND {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Reg(1),
+        });
         assert_eq!(vm.registers[0], 4 & 7);
         assert_eq!(vm.registers[1], 4);
         assert_eq!(vm.registers[2], 7);
@@ -514,7 +531,11 @@ mod tests {
         vm.registers[1] = 4;
         vm.registers[2] = 7;
 
-        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Immediate(9)});
+        vm.execute(Opcode::AND {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Immediate(9),
+        });
         assert_eq!(vm.registers[0], 4 & 9);
         assert_eq!(vm.registers[1], 4);
         assert_eq!(vm.registers[2], 7);
@@ -529,7 +550,11 @@ mod tests {
         vm.registers[1] = 4;
         vm.registers[2] = 7;
 
-        vm.execute(Opcode::AND {dr: 0, sr1: 1, sr2: Argument::Immediate(0)});
+        vm.execute(Opcode::AND {
+            dr: 0,
+            sr1: 1,
+            sr2: Argument::Immediate(0),
+        });
         assert_eq!(vm.registers[0], 0);
         assert_eq!(vm.registers[1], 4);
         assert_eq!(vm.registers[2], 7);
@@ -623,9 +648,7 @@ mod tests {
         let mut vm = VM::new(&data);
 
         vm.registers[1] = 0x3999;
-        vm.execute(Opcode::JMP {
-            base_r: 1,
-        });
+        vm.execute(Opcode::JMP { base_r: 1 });
         assert_eq!(vm.pc(), 0x3999);
     }
 

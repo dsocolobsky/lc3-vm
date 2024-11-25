@@ -19,11 +19,10 @@ fn main() {
 
     // Terminal stuff
     let stdin = 0;
-    let termios = termios::Termios::from_fd(stdin).unwrap();
-    let mut new_termios = termios.clone();
-    new_termios.c_iflag &= IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON;
-    new_termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
-    tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
+    let mut termios = Termios::from_fd(stdin).unwrap();
+    termios.c_iflag &= IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON;
+    termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
+    tcsetattr(stdin, TCSANOW, &termios).unwrap();
 
     println!("Loading file {filename}");
     let data: Vec<u8> = fs::read(filename).expect("Failed to load file");

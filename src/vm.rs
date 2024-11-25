@@ -44,7 +44,6 @@ pub struct VM {
 }
 
 impl VM {
-
     pub(crate) fn new(data: &[u8]) -> Self {
         let mut vm = VM {
             running: false,
@@ -86,7 +85,8 @@ impl VM {
     }
 
     fn reg_set(&mut self, idx: usize, val: u16) {
-        let reg = self.registers
+        let reg = self
+            .registers
             .get_mut(idx)
             .unwrap_or_else(|| panic!("{}", VMError::RegisterIndexOutOfBounds(idx)));
         *reg = val;
@@ -94,7 +94,10 @@ impl VM {
 
     fn fetch(&self) -> u16 {
         let pc = self.pc();
-        *self.memory.get(pc).unwrap_or_else(|| panic!("{}", VMError::FetchOutOfBounds(pc)))
+        *self
+            .memory
+            .get(pc)
+            .unwrap_or_else(|| panic!("{}", VMError::FetchOutOfBounds(pc)))
     }
 
     fn cond_flag(&self) -> ConditionFlag {
@@ -303,7 +306,8 @@ impl VM {
     }
 
     fn set_pc(&mut self, new_pc: usize) {
-        let new_pc = u16::try_from(new_pc).unwrap_or_else(|_| panic!("{}", VMError::PcOutOfBounds(new_pc)));
+        let new_pc =
+            u16::try_from(new_pc).unwrap_or_else(|_| panic!("{}", VMError::PcOutOfBounds(new_pc)));
         self.reg_set(REG_IDX_PC, new_pc);
     }
 
@@ -320,7 +324,10 @@ impl VM {
         if position == MR_KBSR {
             self.handle_keyboard();
         }
-        *self.memory.get(position).unwrap_or_else(|| panic!("{}", VMError::MemReadOutOfBounds(position)))
+        *self
+            .memory
+            .get(position)
+            .unwrap_or_else(|| panic!("{}", VMError::MemReadOutOfBounds(position)))
     }
 
     fn read_with_offset(&mut self, offset: i16) -> u16 {
@@ -359,7 +366,9 @@ impl VM {
                 let ch = self.reg(0) as u8;
                 print!("{}", ch as char);
                 eprint!("{}", ch as char);
-                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
+                io::stdout()
+                    .flush()
+                    .unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
             }
             TrapCode::Puts => {
                 let mut i = self.reg(0) as usize;
@@ -369,11 +378,15 @@ impl VM {
                     eprint!("{}", ch as char);
                     i += 1;
                 }
-                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
+                io::stdout()
+                    .flush()
+                    .unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
             }
             TrapCode::In => {
                 println!("Enter a character: ");
-                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
+                io::stdout()
+                    .flush()
+                    .unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
                 let char = io::stdin()
                     .bytes()
                     .next()

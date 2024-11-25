@@ -3,6 +3,7 @@
 
 use termios::*;
 
+mod memory;
 mod opcodes;
 mod util;
 mod vm;

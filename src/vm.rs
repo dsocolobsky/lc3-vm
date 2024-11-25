@@ -1,12 +1,11 @@
+use crate::memory::Memory;
 use crate::opcodes::{Argument, Opcode, TrapCode};
-use crate::util::join_u8;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Read, Write};
 use thiserror::Error;
 
-const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
 const REG_IDX_COND: usize = 9;
 const PC_START_POS: usize = 0x3000;
@@ -29,10 +28,6 @@ pub enum VMError {
     RegisterIndexOutOfBounds(usize),
     #[error("Out of bounds PC {0:#x} should fit in 16 bits")]
     PcOutOfBounds(usize),
-    #[error("Out of bounds memory read {0:#x}")]
-    MemReadOutOfBounds(usize),
-    #[error("Out of bounds fetch {0:#x}")]
-    FetchOutOfBounds(usize),
     #[error("IO Error failed to flush")]
     FlushFailed,
 }
@@ -40,7 +35,7 @@ pub enum VMError {
 pub struct VM {
     running: bool,
     registers: [u16; 10],
-    memory: [u16; MEMORY_SIZE],
+    memory: Memory,
 }
 
 impl VM {
@@ -48,9 +43,9 @@ impl VM {
         let mut vm = VM {
             running: false,
             registers: [0; 10],
-            memory: [0; MEMORY_SIZE],
+            memory: Memory::new(),
         };
-        vm.read_data_into_memory(data);
+        vm.memory.load_bulk(data);
         vm.set_pc(PC_START_POS);
         vm.set_cond_flag(ConditionFlag::None);
         vm
@@ -94,10 +89,7 @@ impl VM {
 
     fn fetch(&self) -> u16 {
         let pc = self.pc();
-        *self
-            .memory
-            .get(pc)
-            .unwrap_or_else(|| panic!("{}", VMError::FetchOutOfBounds(pc)))
+        self.memory.read(pc)
     }
 
     fn cond_flag(&self) -> ConditionFlag {
@@ -121,19 +113,6 @@ impl VM {
             ConditionFlag::None => 0,
         };
         self.reg_set(REG_IDX_COND, flag);
-    }
-
-    fn read_data_into_memory(&mut self, data: &[u8]) {
-        let origin = join_u8(data[0], data[1]) as usize;
-        eprintln!("Loading data at origin {:#x}", origin);
-        let mut mem_i: usize = origin;
-        let mut data_i: usize = 2; // Skip the origin
-        while mem_i < MEMORY_SIZE - 1 && data_i < data.len() {
-            let word = join_u8(data[data_i], data[data_i + 1]);
-            self.memory[mem_i] = word;
-            mem_i += 1;
-            data_i += 2;
-        }
     }
 
     fn execute(&mut self, opcode: Opcode) {
@@ -274,20 +253,20 @@ impl VM {
                     sr,
                     val
                 );
-                self.memory[dir] = val;
+                self.memory.write(dir, val);
             }
             Opcode::STI { sr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
                 let val = self.reg(sr);
                 eprintln!("STI mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
-                self.memory[dir] = val;
+                self.memory.write(dir, val);
             }
             Opcode::STR { sr, base_r, offset } => {
                 let base_r_dir = self.reg(base_r);
                 let dir = (base_r_dir as i16).wrapping_add(offset) as usize;
                 let val = self.reg(sr);
                 eprintln!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
-                self.memory[dir] = val;
+                self.memory.write(dir, val);
             }
             Opcode::TRAP { trap_code } => {
                 eprintln!("TRAP {:?}", trap_code);
@@ -324,10 +303,7 @@ impl VM {
         if position == MR_KBSR {
             self.handle_keyboard();
         }
-        *self
-            .memory
-            .get(position)
-            .unwrap_or_else(|| panic!("{}", VMError::MemReadOutOfBounds(position)))
+        self.memory.read(position)
     }
 
     fn read_with_offset(&mut self, offset: i16) -> u16 {
@@ -338,10 +314,10 @@ impl VM {
         let mut buffer = [0; 1];
         io::stdin().read_exact(&mut buffer).unwrap();
         if buffer[0] != 0 {
-            self.memory[MR_KBSR] = 1 << 15;
-            self.memory[MR_KBDR] = buffer[0] as u16;
+            self.memory.write(MR_KBSR, 1 << 15);
+            self.memory.write(MR_KBDR, buffer[0] as u16);
         } else {
-            self.memory[MR_KBSR] = 0;
+            self.memory.write(MR_KBSR, 0);
         }
     }
 
@@ -372,8 +348,8 @@ impl VM {
             }
             TrapCode::Puts => {
                 let mut i = self.reg(0) as usize;
-                while self.memory[i] != 0x0000 {
-                    let ch = self.memory[i] as u8;
+                while self.memory.read(i) != 0x0000 {
+                    let ch = self.memory.read(i) as u8;
                     print!("{}", ch as char);
                     eprint!("{}", ch as char);
                     i += 1;
@@ -398,8 +374,8 @@ impl VM {
             }
             TrapCode::Putsp => {
                 let mut i = self.reg(0) as usize;
-                while self.memory[i] != 0x0000 {
-                    let ch = self.memory[i];
+                while self.memory.read(i) != 0x0000 {
+                    let ch = self.memory.read(i);
                     let (ch1, ch2) = (ch & 0xFF, ch >> 8);
                     print!("{}", (ch1 as u8) as char);
                     eprint!("{}", (ch1 as u8) as char);
@@ -439,6 +415,7 @@ impl Debug for VM {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::join_u8;
 
     #[test]
     fn test_le_to_be() {
@@ -453,13 +430,13 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let vm = VM::new(&data);
         for i in 0x3000_usize..0x3000 + 4 {
-            println!("{:x?}", vm.memory[i]);
+            println!("{:x?}", vm.memory.read(i));
         }
         for i in 0..0x3000 {
-            assert_eq!(vm.memory[i], 0);
+            assert_eq!(vm.memory.read(i), 0);
         }
-        assert_eq!(vm.memory[0x3000], 0xcafe);
-        assert_eq!(vm.memory[0x3001], 0xbabe);
+        assert_eq!(vm.memory.read(0x3000), 0xcafe);
+        assert_eq!(vm.memory.read(0x3001), 0xbabe);
     }
 
     #[test]

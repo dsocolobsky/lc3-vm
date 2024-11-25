@@ -8,9 +8,15 @@ mod util;
 mod vm;
 
 use crate::vm::VM;
-use std::fs;
+use std::{env, fs};
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let Some(filename) = args.get(1) else {
+        println!("You must provide an obj file");
+        std::process::exit(1);
+    };
+
     // Terminal stuff
     let stdin = 0;
     let termios = termios::Termios::from_fd(stdin).unwrap();
@@ -19,7 +25,8 @@ fn main() {
     new_termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
     tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
 
-    let data: Vec<u8> = fs::read("2048.obj").expect("Failed to load file");
+    println!("Loading file {filename}");
+    let data: Vec<u8> = fs::read(filename).expect("Failed to load file");
     let mut vm = VM::new(&data);
     vm.run();
 

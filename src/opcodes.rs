@@ -1,4 +1,5 @@
 use crate::util::{sign_ext_imm11, sign_ext_imm5, sign_ext_imm6, sign_ext_imm9};
+use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Argument {
@@ -14,6 +15,14 @@ pub(crate) enum TrapCode {
     In,
     Putsp,
     Halt,
+}
+
+#[derive(Error, Debug)]
+pub enum DecodeError {
+    #[error("Invalid opcode {0:#x}")]
+    InvalidOpcode(u16),
+    #[error("Invalid trap code {0:#x}")]
+    InvalidTrapCode(u16),
 }
 
 impl TryFrom<u16> for TrapCode {
@@ -117,7 +126,7 @@ pub enum Opcode {
 }
 
 impl TryFrom<u16> for Opcode {
-    type Error = ();
+    type Error = DecodeError;
 
     fn try_from(instruction: u16) -> Result<Self, Self::Error> {
         let op = (instruction >> 12) as u8; // Highest 4 bits
@@ -269,13 +278,13 @@ impl TryFrom<u16> for Opcode {
                 if let Ok(trap_code) = TrapCode::try_from(trap_code_hex) {
                     Ok(Opcode::TRAP { trap_code })
                 } else {
-                    Err(())
+                    Err(DecodeError::InvalidTrapCode(trap_code_hex))
                 }
             }
             0b1101 => Ok(Opcode::RESERVED),
             _ => {
                 println!("Unknown instruction {op}");
-                Err(())
+                Err(DecodeError::InvalidOpcode(op as u16))
             }
         }
     }

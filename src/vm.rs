@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::io;
 use std::io::{Read, Write};
+use thiserror::Error;
 
 const MEMORY_SIZE: usize = 2_usize.pow(16);
 const REG_IDX_PC: usize = 8;
@@ -22,6 +23,20 @@ enum ConditionFlag {
     None,
 }
 
+#[derive(Error, Debug)]
+pub enum VMError {
+    #[error("Register Index {0} out of bounds")]
+    RegisterIndexOutOfBounds(usize),
+    #[error("Out of bounds PC {0:#x} should fit in 16 bits")]
+    PcOutOfBounds(usize),
+    #[error("Out of bounds memory read {0:#x}")]
+    MemReadOutOfBounds(usize),
+    #[error("Out of bounds fetch {0:#x}")]
+    FetchOutOfBounds(usize),
+    #[error("IO Error failed to flush")]
+    FlushFailed,
+}
+
 pub struct VM {
     running: bool,
     registers: [u16; 10],
@@ -29,6 +44,7 @@ pub struct VM {
 }
 
 impl VM {
+
     pub(crate) fn new(data: &[u8]) -> Self {
         let mut vm = VM {
             running: false,
@@ -63,22 +79,22 @@ impl VM {
     }
 
     fn reg(&self, idx: usize) -> u16 {
-        *self
-            .registers
+        self.registers
             .get(idx)
-            .unwrap_or_else(|| panic!("Index register {} out of bounds", idx))
+            .copied()
+            .unwrap_or_else(|| panic!("{}", VMError::RegisterIndexOutOfBounds(idx)))
     }
 
     fn reg_set(&mut self, idx: usize, val: u16) {
-        let reg = self
-            .registers
+        let reg = self.registers
             .get_mut(idx)
-            .unwrap_or_else(|| panic!("Index register {} out of bounds", idx));
+            .unwrap_or_else(|| panic!("{}", VMError::RegisterIndexOutOfBounds(idx)));
         *reg = val;
     }
 
     fn fetch(&self) -> u16 {
-        *self.memory.get(self.pc()).expect("Out of bounds fetch")
+        let pc = self.pc();
+        *self.memory.get(pc).unwrap_or_else(|| panic!("{}", VMError::FetchOutOfBounds(pc)))
     }
 
     fn cond_flag(&self) -> ConditionFlag {
@@ -287,7 +303,7 @@ impl VM {
     }
 
     fn set_pc(&mut self, new_pc: usize) {
-        let new_pc = u16::try_from(new_pc).expect("PC should fit in 16 bits");
+        let new_pc = u16::try_from(new_pc).unwrap_or_else(|_| panic!("{}", VMError::PcOutOfBounds(new_pc)));
         self.reg_set(REG_IDX_PC, new_pc);
     }
 
@@ -304,7 +320,7 @@ impl VM {
         if position == MR_KBSR {
             self.handle_keyboard();
         }
-        *self.memory.get(position).expect("Out of bounds read")
+        *self.memory.get(position).unwrap_or_else(|| panic!("{}", VMError::MemReadOutOfBounds(position)))
     }
 
     fn read_with_offset(&mut self, offset: i16) -> u16 {
@@ -343,7 +359,7 @@ impl VM {
                 let ch = self.reg(0) as u8;
                 print!("{}", ch as char);
                 eprint!("{}", ch as char);
-                io::stdout().flush().expect("Failed to flush");
+                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
             }
             TrapCode::Puts => {
                 let mut i = self.reg(0) as usize;
@@ -353,11 +369,11 @@ impl VM {
                     eprint!("{}", ch as char);
                     i += 1;
                 }
-                io::stdout().flush().expect("Failed to flush");
+                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
             }
             TrapCode::In => {
                 println!("Enter a character: ");
-                io::stdout().flush().expect("failed to flush");
+                io::stdout().flush().unwrap_or_else(|_| panic!("{}", VMError::FlushFailed));
                 let char = io::stdin()
                     .bytes()
                     .next()

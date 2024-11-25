@@ -183,11 +183,13 @@ impl VM {
                 self.set_pc(dir);
             }
             Opcode::JSR { offset } => {
+                self.registers[REG_RET] = self.pc() as u16;
                 let dir = self.pc_with_offset(offset);
                 eprintln!("JSR {:#0x}+{} = {:#0x}", self.pc(), offset, dir);
                 self.set_pc(dir);
             }
             Opcode::JSRR { base_r } => {
+                self.registers[REG_RET] = self.pc() as u16;
                 eprintln!("JSRR {:#0x}", self.registers[base_r]);
                 self.set_pc(self.registers[base_r] as usize);
             }

@@ -1,4 +1,4 @@
-use crate::opcodes::{Argument, Opcode};
+use crate::opcodes::{Argument, Opcode, TrapCode};
 use crate::util::join_u8;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
@@ -20,16 +20,6 @@ enum ConditionFlag {
     Neg,
     Zero,
     None,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum TrapCode {
-    Getc,
-    Out,
-    Puts,
-    In,
-    Putsp,
-    Halt,
 }
 
 pub struct VM {

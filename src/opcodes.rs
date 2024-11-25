@@ -1,10 +1,35 @@
 use crate::util::{sign_ext_imm11, sign_ext_imm5, sign_ext_imm6, sign_ext_imm9};
-use crate::vm::TrapCode;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Argument {
     Reg(usize),
     Immediate(i16),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum TrapCode {
+    Getc,
+    Out,
+    Puts,
+    In,
+    Putsp,
+    Halt,
+}
+
+impl TryFrom<u16> for TrapCode {
+    type Error = ();
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        match value {
+            0x20 => Ok(TrapCode::Getc),
+            0x21 => Ok(TrapCode::Out),
+            0x22 => Ok(TrapCode::Puts),
+            0x23 => Ok(TrapCode::In),
+            0x24 => Ok(TrapCode::Putsp),
+            0x25 => Ok(TrapCode::Halt),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -241,16 +266,11 @@ impl TryFrom<u16> for Opcode {
             }
             0b1111 => {
                 let trap_code_hex = instruction & 0b1111_1111;
-                let trap_code = match trap_code_hex {
-                    0x20 => TrapCode::Getc,
-                    0x21 => TrapCode::Out,
-                    0x22 => TrapCode::Puts,
-                    0x23 => TrapCode::In,
-                    0x24 => TrapCode::Putsp,
-                    0x25 => TrapCode::Halt,
-                    _ => panic!("Unknown trap code {trap_code_hex} !"),
-                };
-                Ok(Opcode::TRAP { trap_code })
+                if let Ok(trap_code) = TrapCode::try_from(trap_code_hex) {
+                    Ok(Opcode::TRAP { trap_code })
+                } else {
+                    Err(())
+                }
             }
             0b1101 => Ok(Opcode::RESERVED),
             _ => {
@@ -263,8 +283,7 @@ impl TryFrom<u16> for Opcode {
 
 #[cfg(test)]
 mod tests {
-    use crate::opcodes::{Argument, Opcode};
-    use crate::vm::TrapCode;
+    use crate::opcodes::{Argument, Opcode, TrapCode};
 
     #[test]
     fn decode_add_reg() {

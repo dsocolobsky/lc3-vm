@@ -292,11 +292,7 @@ impl VM {
 
     fn pc_with_offset(&self, offset: i16) -> usize {
         let pc = self.pc() as u16;
-        if offset >= 0 {
-            pc.wrapping_add(offset as u16) as usize
-        } else {
-            pc.wrapping_sub((-offset) as u16) as usize
-        }
+        pc.wrapping_add_signed(offset) as usize
     }
 
     fn read(&mut self, position: usize) -> u16 {

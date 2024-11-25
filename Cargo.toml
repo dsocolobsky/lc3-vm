@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+termios = "0.3.3"
+libc = "0.2.164"
+signal-hook = "0.3.17"
+thiserror = "2.0.3"

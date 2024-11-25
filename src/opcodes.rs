@@ -202,7 +202,7 @@ impl TryFrom<u16> for Opcode {
                 // LEA
                 let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::LEA {
-                    dr: ((instruction & 0b111_0000_0000) >> 8) as usize,
+                    dr: ((instruction & 0b111_000000000) >> 9) as usize,
                     offset,
                 })
             }
@@ -210,7 +210,7 @@ impl TryFrom<u16> for Opcode {
                 // NOT
                 Ok(Opcode::NOT {
                     dr: ((instruction & 0b111_000_0_00000) >> 9) as usize,
-                    sr: ((instruction & 0b111_000_0_00000) >> 9) as usize,
+                    sr: ((instruction & 0b000_111_0_00000) >> 6) as usize,
                 })
             }
             0b1000 => Ok(Opcode::RTI),
@@ -218,7 +218,7 @@ impl TryFrom<u16> for Opcode {
                 // ST
                 let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::ST {
-                    sr: ((instruction & 0b111_0000_0000) >> 8) as usize,
+                    sr: ((instruction & 0b111_000000000) >> 9) as usize,
                     offset,
                 })
             }
@@ -226,7 +226,7 @@ impl TryFrom<u16> for Opcode {
                 // STI
                 let offset = sign_ext_imm9(instruction);
                 Ok(Opcode::STI {
-                    sr: ((instruction & 0b111_0000_0000) >> 8) as usize,
+                    sr: ((instruction & 0b111_000000000) >> 9) as usize,
                     offset,
                 })
             }

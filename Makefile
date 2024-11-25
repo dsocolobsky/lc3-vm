@@ -8,7 +8,7 @@ build:
 
 .PHONY: clean
 clean:
-	cargo clean
+	cargo clean && rm *.sym
 
 .PHONY: test
 test:

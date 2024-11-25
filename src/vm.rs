@@ -62,12 +62,27 @@ impl VM {
         }
     }
 
+    fn reg(&self, idx: usize) -> u16 {
+        *self
+            .registers
+            .get(idx)
+            .unwrap_or_else(|| panic!("Index register {} out of bounds", idx))
+    }
+
+    fn reg_set(&mut self, idx: usize, val: u16) {
+        let reg = self
+            .registers
+            .get_mut(idx)
+            .unwrap_or_else(|| panic!("Index register {} out of bounds", idx));
+        *reg = val;
+    }
+
     fn fetch(&self) -> u16 {
         *self.memory.get(self.pc()).expect("Out of bounds fetch")
     }
 
     fn cond_flag(&self) -> ConditionFlag {
-        let r = self.registers[REG_IDX_COND];
+        let r = self.reg(REG_IDX_COND);
         if r == 1 << 0 {
             ConditionFlag::Pos
         } else if r == 1 << 1 {
@@ -80,12 +95,13 @@ impl VM {
     }
 
     fn set_cond_flag(&mut self, cond: ConditionFlag) {
-        self.registers[REG_IDX_COND] = match cond {
+        let flag = match cond {
             ConditionFlag::Pos => 1 << 0,
             ConditionFlag::Zero => 1 << 1,
             ConditionFlag::Neg => 1 << 2,
             ConditionFlag::None => 0,
-        }
+        };
+        self.reg_set(REG_IDX_COND, flag);
     }
 
     fn read_data_into_memory(&mut self, data: &[u8]) {
@@ -108,9 +124,9 @@ impl VM {
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                let res = u16::wrapping_add(self.registers[sr1], self.registers[sr2]);
+                let res = u16::wrapping_add(self.reg(sr1), self.reg(sr2));
                 eprintln!("ADD reg[{dr}] <- reg[{sr1}] + reg[{sr2}] = {res}");
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::ADD {
@@ -118,9 +134,9 @@ impl VM {
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                let res = u16::wrapping_add(self.registers[sr1], val as u16);
+                let res = u16::wrapping_add(self.reg(sr1), val as u16);
                 eprintln!("ADD reg[{dr}] <- reg[{sr1}] + {val} = {res}");
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::AND {
@@ -128,12 +144,12 @@ impl VM {
                 sr1,
                 sr2: Argument::Reg(sr2),
             } => {
-                let res = self.registers[sr1] & self.registers[sr2];
+                let res = self.reg(sr1) & self.reg(sr2);
                 eprintln!(
                     "AND reg[{}] <- reg[{}] & reg[{}] = {:#0x}",
                     dr, sr1, sr2, res
                 );
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::AND {
@@ -141,12 +157,12 @@ impl VM {
                 sr1,
                 sr2: Argument::Immediate(val),
             } => {
-                let res = ((self.registers[sr1] as i16) & val) as u16;
+                let res = ((self.reg(sr1) as i16) & val) as u16;
                 eprintln!(
                     "AND reg[{}] <- reg[{}] & {:#0x} = {:#0x}",
                     dr, sr1, val, res
                 );
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::BR { n, z, p, offset } => {
@@ -163,28 +179,28 @@ impl VM {
             }
             Opcode::JMP { base_r } => {
                 eprintln!("JMP {:#0x}", base_r);
-                self.set_pc(self.registers[base_r] as usize);
+                self.set_pc(self.reg(base_r) as usize);
             }
             Opcode::RET => {
-                let dir = self.registers[REG_RET] as usize;
+                let dir = self.reg(REG_RET) as usize;
                 eprintln!("RET {:#0x}", dir);
                 self.set_pc(dir);
             }
             Opcode::JSR { offset } => {
-                self.registers[REG_RET] = self.pc() as u16;
+                self.reg_set(REG_RET, self.pc() as u16);
                 let dir = self.pc_with_offset(offset);
                 eprintln!("JSR {:#0x}+{} = {:#0x}", self.pc(), offset, dir);
                 self.set_pc(dir);
             }
             Opcode::JSRR { base_r } => {
-                self.registers[REG_RET] = self.pc() as u16;
-                eprintln!("JSRR {:#0x}", self.registers[base_r]);
-                self.set_pc(self.registers[base_r] as usize);
+                self.reg_set(REG_RET, self.pc() as u16);
+                eprintln!("JSRR {:#0x}", self.reg(base_r));
+                self.set_pc(self.reg(base_r) as usize);
             }
             Opcode::LD { dr, offset } => {
                 let res = self.read_with_offset(offset);
                 eprintln!("LD reg[{dr}] <- {res}");
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::LDI { dr, offset } => {
@@ -198,30 +214,30 @@ impl VM {
                     dir,
                     res
                 );
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::LDR { dr, base_r, offset } => {
-                let base_r_dir = self.registers[base_r];
+                let base_r_dir = self.reg(base_r);
                 let dir = (base_r_dir as i16).wrapping_add(offset) as usize;
                 let res = self.read(dir);
                 eprintln!(
                     "LDR reg[{}] <- mem[{:#0x}+{}={:#0x}] = {:#0x}",
                     dr, base_r, offset, dir, res
                 );
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::LEA { dr, offset } => {
                 let dir = self.pc_with_offset(offset) as u16;
                 eprintln!("LEA reg[{}] <- {:#0x}", dr, dir);
-                self.registers[dr] = dir;
+                self.reg_set(dr, dir);
                 self.set_flags(dir as i16);
             }
             Opcode::NOT { dr, sr } => {
-                let res = !self.registers[sr];
+                let res = !self.reg(sr);
                 eprintln!("NOT reg[{}] <- !reg[{}] = {:#0x}", dr, sr, res);
-                self.registers[dr] = res;
+                self.reg_set(dr, res);
                 self.set_flags(res as i16);
             }
             Opcode::RTI => {
@@ -230,7 +246,7 @@ impl VM {
             }
             Opcode::ST { sr, offset } => {
                 let dir = self.pc_with_offset(offset);
-                let val = self.registers[sr];
+                let val = self.reg(sr);
                 eprintln!(
                     "ST mem[{:#0x}+{:#0x} = {:#0x}] <- reg[{}] = {:#0x}",
                     self.pc(),
@@ -243,20 +259,20 @@ impl VM {
             }
             Opcode::STI { sr, offset } => {
                 let dir = self.read_with_offset(offset) as usize;
-                let val = self.registers[sr];
+                let val = self.reg(sr);
                 eprintln!("STI mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
-                self.memory[dir] = self.registers[sr];
+                self.memory[dir] = val;
             }
             Opcode::STR { sr, base_r, offset } => {
-                let base_r_dir = self.registers[base_r];
+                let base_r_dir = self.reg(base_r);
                 let dir = (base_r_dir as i16).wrapping_add(offset) as usize;
-                let val = self.registers[sr];
+                let val = self.reg(sr);
                 eprintln!("STR mem[{:#0x}] <- reg[{}] = {:#0x}", dir, sr, val);
                 self.memory[dir] = val;
             }
             Opcode::TRAP { trap_code } => {
                 eprintln!("TRAP {:?}", trap_code);
-                self.registers[REG_RET] = self.pc() as u16;
+                self.reg_set(REG_RET, self.pc() as u16);
                 self.handle_trap_code(trap_code);
             }
             Opcode::RESERVED => {
@@ -267,12 +283,12 @@ impl VM {
     }
 
     fn pc(&self) -> usize {
-        self.registers[REG_IDX_PC] as usize
+        self.reg(REG_IDX_PC) as usize
     }
 
     fn set_pc(&mut self, new_pc: usize) {
         let new_pc = u16::try_from(new_pc).expect("PC should fit in 16 bits");
-        self.registers[REG_IDX_PC] = new_pc;
+        self.reg_set(REG_IDX_PC, new_pc);
     }
 
     fn advance_pc(&mut self) {
@@ -320,17 +336,17 @@ impl VM {
             TrapCode::Getc => {
                 let mut buffer = [0; 1];
                 io::stdin().read_exact(&mut buffer).unwrap();
-                self.registers[0] = buffer[0] as u16;
-                self.set_flags(self.registers[0] as i16);
+                self.reg_set(0, buffer[0] as u16);
+                self.set_flags(self.reg(0) as i16);
             }
             TrapCode::Out => {
-                let ch = self.registers[0] as u8;
+                let ch = self.reg(0) as u8;
                 print!("{}", ch as char);
                 eprint!("{}", ch as char);
                 io::stdout().flush().expect("Failed to flush");
             }
             TrapCode::Puts => {
-                let mut i = self.registers[0] as usize;
+                let mut i = self.reg(0) as usize;
                 while self.memory[i] != 0x0000 {
                     let ch = self.memory[i] as u8;
                     print!("{}", ch as char);
@@ -348,11 +364,11 @@ impl VM {
                     .and_then(|result| result.ok())
                     .map(|byte| byte as u16)
                     .unwrap();
-                self.registers[0] = char;
-                self.set_flags(self.registers[0] as i16);
+                self.reg_set(0, char);
+                self.set_flags(self.reg(0) as i16);
             }
             TrapCode::Putsp => {
-                let mut i = self.registers[0] as usize;
+                let mut i = self.reg(0) as usize;
                 while self.memory[i] != 0x0000 {
                     let ch = self.memory[i];
                     let (ch1, ch2) = (ch & 0xFF, ch >> 8);
@@ -377,16 +393,16 @@ impl Debug for VM {
         writeln!(
             f,
             "[r0={},r1={},r2={},r3={},r4={},r5={},r6={},r7={},PC={:#X},COND={:#X}]",
-            self.registers[0],
-            self.registers[1],
-            self.registers[2],
-            self.registers[3],
-            self.registers[4],
-            self.registers[5],
-            self.registers[6],
-            self.registers[7],
-            self.registers[8],
-            self.registers[9]
+            self.reg(0),
+            self.reg(1),
+            self.reg(2),
+            self.reg(3),
+            self.reg(4),
+            self.reg(5),
+            self.reg(6),
+            self.reg(7),
+            self.reg(8),
+            self.reg(9),
         )
     }
 }
@@ -422,18 +438,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 10;
-        vm.registers[1] = 3;
-        vm.registers[2] = 5;
+        vm.reg_set(0, 10);
+        vm.reg_set(1, 3);
+        vm.reg_set(2, 5);
 
         vm.execute(Opcode::ADD {
             dr: 0,
             sr1: 1,
             sr2: Argument::Reg(2),
         });
-        assert_eq!(vm.registers[0], 8);
-        assert_eq!(vm.registers[1], 3);
-        assert_eq!(vm.registers[2], 5);
+        assert_eq!(vm.reg(0), 8);
+        assert_eq!(vm.reg(1), 3);
+        assert_eq!(vm.reg(2), 5);
     }
 
     #[test]
@@ -441,18 +457,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 0;
-        vm.registers[1] = 0;
-        vm.registers[2] = 0;
+        vm.reg_set(0, 0);
+        vm.reg_set(1, 0);
+        vm.reg_set(2, 0);
 
         vm.execute(Opcode::ADD {
             dr: 0,
             sr1: 1,
             sr2: Argument::Immediate(-5),
         });
-        assert_eq!(vm.registers[0], 0b1111_1111_1111_1011);
-        assert_eq!(vm.registers[1], 0);
-        assert_eq!(vm.registers[2], 0);
+        assert_eq!(vm.reg(0), 0b1111_1111_1111_1011);
+        assert_eq!(vm.reg(1), 0);
+        assert_eq!(vm.reg(2), 0);
     }
 
     #[test]
@@ -460,18 +476,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 3;
-        vm.registers[1] = u16::MAX;
-        vm.registers[2] = 2;
+        vm.reg_set(0, 3);
+        vm.reg_set(1, u16::MAX);
+        vm.reg_set(2, 2);
 
         vm.execute(Opcode::ADD {
             dr: 0,
             sr1: 1,
             sr2: Argument::Reg(2),
         });
-        assert_eq!(vm.registers[0], 1);
-        assert_eq!(vm.registers[1], u16::MAX);
-        assert_eq!(vm.registers[2], 2);
+        assert_eq!(vm.reg(0), 1);
+        assert_eq!(vm.reg(1), u16::MAX);
+        assert_eq!(vm.reg(2), 2);
     }
 
     #[test]
@@ -479,18 +495,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 3;
-        vm.registers[1] = u16::MAX;
-        vm.registers[2] = 1;
+        vm.reg_set(0, 3);
+        vm.reg_set(1, u16::MAX);
+        vm.reg_set(2, 1);
 
         vm.execute(Opcode::ADD {
             dr: 0,
             sr1: 1,
             sr2: Argument::Immediate(2),
         });
-        assert_eq!(vm.registers[0], 1);
-        assert_eq!(vm.registers[1], u16::MAX);
-        assert_eq!(vm.registers[2], 1);
+        assert_eq!(vm.reg(0), 1);
+        assert_eq!(vm.reg(1), u16::MAX);
+        assert_eq!(vm.reg(2), 1);
     }
 
     #[test]
@@ -498,18 +514,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 3;
-        vm.registers[1] = 4;
-        vm.registers[2] = 7;
+        vm.reg_set(0, 3);
+        vm.reg_set(1, 4);
+        vm.reg_set(2, 7);
 
         vm.execute(Opcode::AND {
             dr: 0,
             sr1: 1,
             sr2: Argument::Reg(1),
         });
-        assert_eq!(vm.registers[0], 4 & 7);
-        assert_eq!(vm.registers[1], 4);
-        assert_eq!(vm.registers[2], 7);
+        assert_eq!(vm.reg(0), 4 & 7);
+        assert_eq!(vm.reg(1), 4);
+        assert_eq!(vm.reg(2), 7);
     }
 
     #[test]
@@ -517,18 +533,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 3;
-        vm.registers[1] = 4;
-        vm.registers[2] = 7;
+        vm.reg_set(0, 3);
+        vm.reg_set(1, 4);
+        vm.reg_set(2, 7);
 
         vm.execute(Opcode::AND {
             dr: 0,
             sr1: 1,
             sr2: Argument::Immediate(9),
         });
-        assert_eq!(vm.registers[0], 4 & 9);
-        assert_eq!(vm.registers[1], 4);
-        assert_eq!(vm.registers[2], 7);
+        assert_eq!(vm.reg(0), 4 & 9);
+        assert_eq!(vm.reg(1), 4);
+        assert_eq!(vm.reg(2), 7);
     }
 
     #[test]
@@ -536,18 +552,18 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[0] = 3;
-        vm.registers[1] = 4;
-        vm.registers[2] = 7;
+        vm.reg_set(0, 3);
+        vm.reg_set(1, 4);
+        vm.reg_set(2, 7);
 
         vm.execute(Opcode::AND {
             dr: 0,
             sr1: 1,
             sr2: Argument::Immediate(0),
         });
-        assert_eq!(vm.registers[0], 0);
-        assert_eq!(vm.registers[1], 4);
-        assert_eq!(vm.registers[2], 7);
+        assert_eq!(vm.reg(0), 0);
+        assert_eq!(vm.reg(1), 4);
+        assert_eq!(vm.reg(2), 7);
     }
 
     #[test]
@@ -637,7 +653,7 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[1] = 0x3999;
+        vm.reg_set(1, 0x3999);
         vm.execute(Opcode::JMP { base_r: 1 });
         assert_eq!(vm.pc(), 0x3999);
     }
@@ -647,7 +663,7 @@ mod tests {
         let data: Vec<u8> = vec![0x30, 0x00, 0xca, 0xfe, 0xba, 0xbe];
         let mut vm = VM::new(&data);
 
-        vm.registers[7] = 0x3999;
+        vm.reg_set(7, 0x3999);
         vm.execute(Opcode::RET);
         assert_eq!(vm.pc(), 0x3999);
     }
@@ -660,7 +676,7 @@ mod tests {
         vm.set_pc(0x3005);
         vm.execute(Opcode::JSR { offset: 15 });
         assert_eq!(vm.pc(), 0x3005 + 15);
-        assert_eq!(vm.registers[REG_RET], 0x3005);
+        assert_eq!(vm.reg(REG_RET), 0x3005);
     }
 
     #[test]
@@ -671,7 +687,7 @@ mod tests {
         vm.set_pc(0x3005);
         vm.execute(Opcode::JSR { offset: -15 });
         assert_eq!(vm.pc(), 0x3005 - 15);
-        assert_eq!(vm.registers[REG_RET], 0x3005);
+        assert_eq!(vm.reg(REG_RET), 0x3005);
     }
 
     #[test]
@@ -680,7 +696,7 @@ mod tests {
         let mut vm = VM::new(&data);
 
         vm.set_pc(0x3005);
-        vm.registers[2] = 0x4000;
+        vm.reg_set(2, 0x4000);
         vm.execute(Opcode::JSRR { base_r: 2 });
         assert_eq!(vm.pc(), 0x4000);
         assert_eq!(vm.registers[REG_RET], 0x3005);
@@ -692,7 +708,7 @@ mod tests {
         let mut vm = VM::new(&data);
 
         vm.execute(Opcode::LD { dr: 0, offset: 2 });
-        assert_eq!(vm.registers[0], 0xbabe);
+        assert_eq!(vm.reg(0), 0xbabe);
     }
 
     #[test]
@@ -702,7 +718,7 @@ mod tests {
 
         vm.set_pc(0x3000 + 2);
         vm.execute(Opcode::LD { dr: 0, offset: -1 });
-        assert_eq!(vm.registers[0], 0xcafe);
+        assert_eq!(vm.reg(0), 0xcafe);
     }
 
     #[test]
@@ -711,7 +727,7 @@ mod tests {
         let mut vm = VM::new(&data);
 
         vm.execute(Opcode::LDI { dr: 0, offset: 0 });
-        assert_eq!(vm.registers[0], 0xbabe);
+        assert_eq!(vm.reg(0), 0xbabe);
     }
 
     #[test]
@@ -721,6 +737,6 @@ mod tests {
 
         vm.set_pc(0x3000 + 1);
         vm.execute(Opcode::LDI { dr: 0, offset: -1 });
-        assert_eq!(vm.registers[0], 0xbabe);
+        assert_eq!(vm.reg(0), 0xbabe);
     }
 }

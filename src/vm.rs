@@ -54,8 +54,7 @@ impl VM {
         self.running = true;
 
         let mut cycle_count = 0; // For debug purposes
-        let cycle_limit = 500000;
-        while self.running && cycle_count < cycle_limit {
+        while self.running {
             // Fetch
             let instruction = self.fetch();
             self.advance_pc();
